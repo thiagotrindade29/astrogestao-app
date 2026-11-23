@@ -1,0 +1,8 @@
+{
+  "name": "AstroGestão",
+  "description": "AstroGestão: controle de estoque doméstico, modo mercado em tempo real, leitura de código de barras/NF-e e análise financeira em Kotlin e Jetpack Compose.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

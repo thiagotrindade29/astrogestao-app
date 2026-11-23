@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account metadata and onboarding state for AstroGestao.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID matching document ID." },
+        "displayName": { "type": "string", "description": "Display name from Google Sign-In." },
+        "email": { "type": "string", "description": "Email address from Google Sign-In." },
+        "seededDefaults": { "type": "boolean", "description": "Whether initial categories and starter products were seeded." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": ["userId", "displayName", "seededDefaults", "createdAt", "updatedAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Household product category with color badge.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "color": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "color", "createdAt", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Home inventory product item with stock level, alert minimum, price history, and location.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "barcode": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "categoryColor": { "type": "string" },
+        "location": { "type": "string" },
+        "unit": { "type": "string" },
+        "quantity": { "type": "number" },
+        "minQuantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "previousUnitPrice": { "type": "number" },
+        "expirationDate": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "location", "unit", "quantity", "minQuantity", "unitPrice", "previousUnitPrice", "createdAt", "updatedAt"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Audit log entry for stock IN, OUT, or ADJUST movements.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "productSku": { "type": "string" },
+        "productUnit": { "type": "string" },
+        "type": { "type": "string", "enum": ["IN", "OUT", "ADJUST"] },
+        "quantity": { "type": "number" },
+        "previousQuantity": { "type": "number" },
+        "newQuantity": { "type": "number" },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "productName", "productUnit", "type", "quantity", "previousQuantity", "newQuantity", "createdAt"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Completed grocery/market shopping receipt header.",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "notes": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "itemsCount": { "type": "integer" },
+        "totalUnits": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["storeName", "totalAmount", "itemsCount", "totalUnits", "createdAt"]
+    },
+    "PurchaseItem": {
+      "title": "PurchaseItem",
+      "description": "Line item recorded inside a completed purchase for price comparison and category spending analytics.",
+      "type": "object",
+      "properties": {
+        "purchaseId": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "barcode": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "categoryColor": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "previousUnitPrice": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["purchaseId", "productName", "quantity", "unitPrice", "previousUnitPrice", "totalPrice", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profile and starter seed state."
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "User's household inventory categories."
+    },
+    "/users/{userId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "User's home inventory product catalog."
+    },
+    "/users/{userId}/movements/{movementId}": {
+      "schema": { "$ref": "#/entities/StockMovement" },
+      "description": "Audit trail of stock inflows, outflows, and adjustments."
+    },
+    "/users/{userId}/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/Purchase" },
+      "description": "Completed supermarket purchases from Market Mode or NF-e import."
+    },
+    "/users/{userId}/purchaseItems/{itemId}": {
+      "schema": { "$ref": "#/entities/PurchaseItem" },
+      "description": "Purchased item price records used in financial and inflation analysis."
+    }
+  }
+}

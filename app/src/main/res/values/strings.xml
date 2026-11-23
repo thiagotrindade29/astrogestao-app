@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AstroGestão</string>
+    <string name="app_tagline">Estoque da casa, compras e finanças</string>
+    <string name="auth_title">Organize sua casa e saiba quanto vai gastar antes do caixa</string>
+    <string name="auth_subtitle">Controle o que tem na despensa e geladeira, escaneie produtos no mercado em tempo real e acompanhe os preços de cada compra.</string>
+    <string name="auth_google_button">Entrar com Google</string>
+    <string name="auth_signing_in">Conectando...</string>
+    <string name="auth_footer_note">Seus dados ficam salvos com segurança na sua conta.</string>
+
+    <string name="nav_dashboard">Início</string>
+    <string name="nav_products">Estoque</string>
+    <string name="nav_market">Mercado</string>
+    <string name="nav_finance">Finanças</string>
+    <string name="nav_more">Mais</string>
+    <string name="nav_movements">Movimentações</string>
+    <string name="nav_categories">Categorias</string>
+    <string name="nav_import_nfe">Importar Cupom / NF-e</string>
+    <string name="nav_sign_out">Sair da conta</string>
+
+    <string name="cd_app_logo">Logo AstroGestão</string>
+    <string name="cd_scan_barcode">Ler código de barras com a câmera</string>
+    <string name="cd_add_product">Adicionar produto</string>
+    <string name="cd_import_nfe">Importar cupom fiscal ou nota</string>
+    <string name="cd_sign_out">Sair da conta</string>
+</resources>

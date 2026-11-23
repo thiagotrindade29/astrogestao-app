@@ -1,0 +1,208 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
+             data.seededDefaults is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCategory(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 250)) &&
+             data.color is string && data.color.size() >= 4 && data.color.size() <= 16 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 150 &&
+             (!('sku' in data) || (data.sku is string && data.sku.size() <= 64)) &&
+             (!('barcode' in data) || (data.barcode is string && data.barcode.size() <= 64)) &&
+             (!('categoryId' in data) || (data.categoryId is string && data.categoryId.size() <= 128)) &&
+             (!('categoryName' in data) || (data.categoryName is string && data.categoryName.size() <= 80)) &&
+             (!('categoryColor' in data) || (data.categoryColor is string && data.categoryColor.size() <= 16)) &&
+             data.location is string && data.location.size() >= 1 && data.location.size() <= 80 &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 16 &&
+             data.quantity is number && data.quantity >= 0 && data.quantity <= 1000000 &&
+             data.minQuantity is number && data.minQuantity >= 0 && data.minQuantity <= 1000000 &&
+             data.unitPrice is number && data.unitPrice >= 0 && data.unitPrice <= 10000000 &&
+             data.previousUnitPrice is number && data.previousUnitPrice >= 0 && data.previousUnitPrice <= 10000000 &&
+             (!('expirationDate' in data) || (data.expirationDate is string && data.expirationDate.size() <= 32)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMovement(data) {
+      return data.productId is string && data.productId.size() >= 1 && data.productId.size() <= 128 &&
+             data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 150 &&
+             (!('productSku' in data) || (data.productSku is string && data.productSku.size() <= 64)) &&
+             data.productUnit is string && data.productUnit.size() >= 1 && data.productUnit.size() <= 16 &&
+             data.type in ['IN', 'OUT', 'ADJUST'] &&
+             data.quantity is number && data.quantity >= 0 && data.quantity <= 1000000 &&
+             data.previousQuantity is number && data.previousQuantity >= 0 && data.previousQuantity <= 1000000 &&
+             data.newQuantity is number && data.newQuantity >= 0 && data.newQuantity <= 1000000 &&
+             (!('reason' in data) || (data.reason is string && data.reason.size() <= 250)) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidPurchase(data) {
+      return data.storeName is string && data.storeName.size() >= 1 && data.storeName.size() <= 120 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 300)) &&
+             data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 10000000 &&
+             data.itemsCount is int && data.itemsCount >= 1 && data.itemsCount <= 1000 &&
+             data.totalUnits is number && data.totalUnits > 0 && data.totalUnits <= 1000000 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidPurchaseItem(data) {
+      return data.purchaseId is string && data.purchaseId.size() >= 1 && data.purchaseId.size() <= 128 &&
+             (!('productId' in data) || (data.productId is string && data.productId.size() <= 128)) &&
+             data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 150 &&
+             (!('barcode' in data) || (data.barcode is string && data.barcode.size() <= 64)) &&
+             (!('categoryName' in data) || (data.categoryName is string && data.categoryName.size() <= 80)) &&
+             (!('categoryColor' in data) || (data.categoryColor is string && data.categoryColor.size() <= 16)) &&
+             data.quantity is number && data.quantity > 0 && data.quantity <= 1000000 &&
+             data.unitPrice is number && data.unitPrice >= 0 && data.unitPrice <= 10000000 &&
+             data.previousUnitPrice is number && data.previousUnitPrice >= 0 && data.previousUnitPrice <= 10000000 &&
+             data.totalPrice is number && data.totalPrice >= 0 && data.totalPrice <= 10000000 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'seededDefaults', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'seededDefaults', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'seededDefaults', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /categories/{categoryId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(categoryId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(categoryId) &&
+                         incoming().keys().hasAll(['name', 'color', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['name', 'description', 'color', 'createdAt', 'updatedAt']) &&
+                         isValidCategory(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(categoryId) &&
+                         isValidCategory(incoming()) &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'color', 'updatedAt']);
+      }
+
+      match /products/{productId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(productId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(productId) &&
+                         incoming().keys().hasAll(['name', 'location', 'unit', 'quantity', 'minQuantity', 'unitPrice', 'previousUnitPrice', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly([
+                           'name', 'sku', 'barcode', 'categoryId', 'categoryName', 'categoryColor',
+                           'location', 'unit', 'quantity', 'minQuantity', 'unitPrice', 'previousUnitPrice',
+                           'expirationDate', 'notes', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidProduct(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(productId) &&
+                         isValidProduct(incoming()) &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'sku', 'barcode', 'categoryId', 'categoryName', 'categoryColor',
+                           'location', 'unit', 'quantity', 'minQuantity', 'unitPrice', 'previousUnitPrice',
+                           'expirationDate', 'notes', 'updatedAt'
+                         ]);
+      }
+
+      match /movements/{movementId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(movementId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(movementId) &&
+                         incoming().keys().hasAll(['productId', 'productName', 'productUnit', 'type', 'quantity', 'previousQuantity', 'newQuantity', 'createdAt']) &&
+                         incoming().keys().hasOnly(['productId', 'productName', 'productSku', 'productUnit', 'type', 'quantity', 'previousQuantity', 'newQuantity', 'reason', 'createdAt']) &&
+                         isValidMovement(incoming());
+
+        allow update: if false;
+      }
+
+      match /purchases/{purchaseId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(purchaseId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(purchaseId) &&
+                         incoming().keys().hasAll(['storeName', 'totalAmount', 'itemsCount', 'totalUnits', 'createdAt']) &&
+                         incoming().keys().hasOnly(['storeName', 'notes', 'totalAmount', 'itemsCount', 'totalUnits', 'createdAt']) &&
+                         isValidPurchase(incoming());
+
+        allow update: if false;
+      }
+
+      match /purchaseItems/{itemId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(itemId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(itemId) &&
+                         incoming().keys().hasAll(['purchaseId', 'productName', 'quantity', 'unitPrice', 'previousUnitPrice', 'totalPrice', 'createdAt']) &&
+                         incoming().keys().hasOnly(['purchaseId', 'productId', 'productName', 'barcode', 'categoryName', 'categoryColor', 'quantity', 'unitPrice', 'previousUnitPrice', 'totalPrice', 'createdAt']) &&
+                         isValidPurchaseItem(incoming());
+
+        allow update: if false;
+      }
+    }
+  }
+}
