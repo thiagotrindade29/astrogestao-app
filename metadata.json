@@ -1,0 +1,8 @@
+{
+  "name": "AstroGestão",
+  "description": "Executive business operations, client CRM, project & task tracking, and cash-flow management Android app.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AstroGestão</string>
+
+    <!-- Navigation -->
+    <string name="nav_dashboard">Overview</string>
+    <string name="nav_projects">Projects</string>
+    <string name="nav_clients">Clients</string>
+    <string name="nav_finance">Cash Flow</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_eyebrow">OPERATIONS COMMAND</string>
+    <string name="dashboard_subtitle">Manage clients, deliveries, and cash flow in one orbit.</string>
+    <string name="dashboard_hero_banner_cd">AstroGestão executive constellation banner</string>
+    <string name="action_new_project">New Project</string>
+    <string name="action_new_transaction">Log Entry</string>
+    <string name="action_new_client">New Client</string>
+    <string name="action_settings">Workspace settings</string>
+    <string name="kpi_net_balance">Net Balance</string>
+    <string name="kpi_total_revenue">Total Revenue</string>
+    <string name="kpi_active_projects">Active Projects</string>
+    <string name="kpi_open_tasks">Open Tasks</string>
+    <string name="section_cash_flow_pulse">Cash Flow Pulse</string>
+    <string name="section_cash_flow_subtitle">Income vs. Expenses by month</string>
+    <string name="section_priority_tasks">Priority Deliverables</string>
+    <string name="section_upcoming_projects">Active Deadlines</string>
+    <string name="empty_workspace_title">Your command deck is ready</string>
+    <string name="empty_workspace_body">Start by adding a client, creating a project order, or logging your first financial entry. Want to preview charts and workflows first?</string>
+    <string name="action_load_sample_data">Load Sample Workspace</string>
+    <string name="action_clear_workspace">Reset All Data</string>
+
+    <!-- Projects -->
+    <string name="projects_search_hint">Search projects, codes, or clients…</string>
+    <string name="projects_empty_title">No projects yet</string>
+    <string name="projects_empty_body">Create a project or service order to track deliverables, budgets, and completion progress.</string>
+    <string name="filter_all">All</string>
+    <string name="status_planned">Planned</string>
+    <string name="status_in_progress">In Progress</string>
+    <string name="status_review">Review</string>
+    <string name="status_completed">Completed</string>
+    <string name="project_progress_label">Completion</string>
+    <string name="project_budget_label">Budget</string>
+    <string name="project_due_label">Due</string>
+    <string name="project_client_unassigned">Internal / No client</string>
+    <string name="project_tasks_header">Deliverable Checklist</string>
+    <string name="project_add_task">Add Task</string>
+    <string name="project_log_revenue">Record Payment</string>
+    <string name="project_no_tasks">No tasks added yet. Break down milestones below.</string>
+
+    <!-- Clients -->
+    <string name="clients_search_hint">Search clients, companies, or segments…</string>
+    <string name="clients_empty_title">No clients registered</string>
+    <string name="clients_empty_body">Add clients to link project orders, contact info, and total billed revenue.</string>
+    <string name="client_projects_count">%1$d projects</string>
+    <string name="client_contact_email">Email</string>
+    <string name="client_contact_phone">Phone</string>
+    <string name="client_notes_label">Account Notes</string>
+    <string name="client_linked_projects">Linked Projects</string>
+    <string name="client_no_projects">No projects linked to this client yet.</string>
+
+    <!-- Finance -->
+    <string name="finance_income_label">Income</string>
+    <string name="finance_expense_label">Expenses</string>
+    <string name="finance_margin_label">Margin</string>
+    <string name="finance_breakdown_title">Category Breakdown</string>
+    <string name="finance_ledger_title">Transaction Ledger</string>
+    <string name="finance_empty_title">No financial entries yet</string>
+    <string name="finance_empty_body">Record project invoices, retainers, and operational expenses to monitor your net margin.</string>
+
+    <!-- Forms & Dialogs -->
+    <string name="label_title">Title</string>
+    <string name="label_code">Order Code</string>
+    <string name="label_description">Scope / Description</string>
+    <string name="label_budget">Budget (USD)</string>
+    <string name="label_amount">Amount (USD)</string>
+    <string name="label_client_name">Contact Name</string>
+    <string name="label_company">Company / Organization</string>
+    <string name="label_segment">Segment</string>
+    <string name="label_email">Email</string>
+    <string name="label_phone">Phone</string>
+    <string name="label_notes">Notes</string>
+    <string name="label_due_in_days">Due in (days)</string>
+    <string name="label_category">Category</string>
+    <string name="label_priority">Priority</string>
+    <string name="label_business_name">Workspace / Business Name</string>
+    <string name="label_dark_theme">Celestial Dark Theme</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_back">Back</string>
+    <string name="confirm_delete_title">Confirm deletion</string>
+    <string name="confirm_delete_project">Delete "%1$s" and all of its tasks?</string>
+    <string name="confirm_delete_client">Delete client "%1$s"? Linked projects will remain unassigned.</string>
+    <string name="confirm_delete_transaction">Remove "%1$s" from the cash-flow ledger?</string>
+    <string name="confirm_reset_workspace">Clear all clients, projects, tasks, and transactions from this device?</string>
+    <string name="error_required_field">This field is required</string>
+    <string name="error_invalid_amount">Enter a valid positive number</string>
+    <string name="error_invalid_email">Enter a valid email address</string>
+</resources>
