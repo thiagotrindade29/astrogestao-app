@@ -1,235 +1,94 @@
 package com.example.ui.screens
 
 import android.util.Patterns
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.R
-import com.example.data.local.ClientEntity
-import com.example.data.local.ProjectEntity
-import com.example.data.local.ProjectStatus
-import com.example.data.local.TaskPriority
-import com.example.data.local.TransactionCategory
-import com.example.data.local.TransactionEntity
-import com.example.data.local.TransactionType
-import com.example.ui.components.ConfirmationDialog
+import com.example.data.local.CategoryEntity
+import com.example.data.local.MovementType
+import com.example.data.local.ProductEntity
+import com.example.ui.components.daysUntil
+import com.example.ui.components.formatQty
+
+private val availableUnits = listOf("un", "kg", "g", "L", "ml", "pct", "cx")
+
+private val categoryColorPalette = listOf(
+    0xFF5B3DF5L,
+    0xFF0284C7L,
+    0xFF059669L,
+    0xFFD97706L,
+    0xFFDC2626L,
+    0xFF7C3AEDL,
+    0xFFDB2777L,
+    0xFF0F172AL
+)
 
 @Composable
-fun ProjectEditorDialog(
-    initialProject: ProjectEntity?,
-    preselectedClientId: Long?,
-    clients: List<ClientEntity>,
-    nextDefaultCode: String,
-    onSave: (ProjectEntity) -> Unit,
+fun ProductEditorDialog(
+    initialProduct: ProductEntity?,
+    categories: List<CategoryEntity>,
+    onSave: (ProductEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var code by remember { mutableStateOf(initialProject?.code ?: nextDefaultCode) }
-    var title by remember { mutableStateOf(initialProject?.title ?: "") }
-    var description by remember { mutableStateOf(initialProject?.description ?: "") }
-    var budgetText by remember {
+    var name by remember { mutableStateOf(initialProduct?.name ?: "") }
+    var code by remember { mutableStateOf(initialProduct?.code ?: "") }
+    var selectedCategoryId by remember {
+        mutableStateOf(initialProduct?.categoryId ?: categories.firstOrNull()?.id)
+    }
+    var unit by remember { mutableStateOf(initialProduct?.unit ?: "un") }
+    var quantityText by remember {
+        mutableStateOf(initialProduct?.quantity?.toString() ?: "1")
+    }
+    var minStockText by remember {
+        mutableStateOf(initialProduct?.minStock?.toString() ?: "1")
+    }
+    var priceText by remember {
+        mutableStateOf(initialProduct?.unitPrice?.takeIf { it > 0.0 }?.toString() ?: "")
+    }
+    var expiryDaysText by remember {
         mutableStateOf(
-            if (initialProject != null && initialProject.budget > 0) initialProject.budget.toString() else ""
+            initialProduct?.expiryDateMillis?.let { daysUntil(it).coerceAtLeast(0).toString() } ?: ""
         )
     }
-    var dueDaysText by remember { mutableStateOf("14") }
-    var selectedClientId by remember { mutableStateOf(initialProject?.clientId ?: preselectedClientId) }
-    var selectedStatus by remember { mutableStateOf(initialProject?.status ?: ProjectStatus.PLANNED) }
-    var titleError by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = if (initialProject == null) stringResource(R.string.action_new_project) else "Edit Project",
-                style = MaterialTheme.typography.titleLarge
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it },
-                    label = { Text(stringResource(R.string.label_code)) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("project_code_input")
-                )
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = {
-                        title = it
-                        titleError = false
-                    },
-                    label = { Text(stringResource(R.string.label_title)) },
-                    isError = titleError,
-                    supportingText = if (titleError) {
-                        { Text(stringResource(R.string.error_required_field)) }
-                    } else null,
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("project_title_input")
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text(stringResource(R.string.label_description)) },
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = budgetText,
-                        onValueChange = { budgetText = it },
-                        label = { Text(stringResource(R.string.label_budget)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("project_budget_input")
-                    )
-                    if (initialProject == null) {
-                        OutlinedTextField(
-                            value = dueDaysText,
-                            onValueChange = { dueDaysText = it },
-                            label = { Text(stringResource(R.string.label_due_in_days)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                if (clients.isNotEmpty()) {
-                    Text("Client", style = MaterialTheme.typography.labelMedium)
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        FilterChip(
-                            selected = selectedClientId == null,
-                            onClick = { selectedClientId = null },
-                            label = { Text("None") }
-                        )
-                        clients.forEach { client ->
-                            FilterChip(
-                                selected = selectedClientId == client.id,
-                                onClick = { selectedClientId = client.id },
-                                label = { Text(client.company.ifBlank { client.name }) }
-                            )
-                        }
-                    }
-                }
-
-                Text("Status", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    ProjectStatus.entries.forEach { st ->
-                        FilterChip(
-                            selected = selectedStatus == st,
-                            onClick = { selectedStatus = st },
-                            label = { Text(st.label) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (title.isBlank()) {
-                        titleError = true
-                        return@Button
-                    }
-                    val budget = budgetText.replace(",", ".").toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
-                    val days = dueDaysText.toIntOrNull()?.coerceAtLeast(1) ?: 14
-                    val dueMillis = initialProject?.dueDateMillis
-                        ?: (System.currentTimeMillis() + days * 86_400_000L)
-                    onSave(
-                        ProjectEntity(
-                            id = initialProject?.id ?: 0L,
-                            code = code.trim().ifBlank { nextDefaultCode },
-                            title = title.trim(),
-                            clientId = selectedClientId,
-                            description = description.trim(),
-                            status = selectedStatus,
-                            budget = budget,
-                            progressPercent = initialProject?.progressPercent ?: 0,
-                            dueDateMillis = dueMillis,
-                            createdAt = initialProject?.createdAt ?: System.currentTimeMillis()
-                        )
-                    )
-                },
-                modifier = Modifier.testTag("save_project_button")
-            ) {
-                Text(stringResource(R.string.action_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.action_cancel))
-            }
-        }
-    )
-}
-
-@Composable
-fun ClientEditorDialog(
-    initialClient: ClientEntity?,
-    onSave: (ClientEntity) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var name by remember { mutableStateOf(initialClient?.name ?: "") }
-    var company by remember { mutableStateOf(initialClient?.company ?: "") }
-    var segment by remember { mutableStateOf(initialClient?.segment ?: "") }
-    var email by remember { mutableStateOf(initialClient?.email ?: "") }
-    var phone by remember { mutableStateOf(initialClient?.phone ?: "") }
-    var notes by remember { mutableStateOf(initialClient?.notes ?: "") }
     var nameError by remember { mutableStateOf(false) }
-    var emailError by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (initialClient == null) stringResource(R.string.action_new_client) else "Edit Client",
+                text = if (initialProduct == null) "Novo Produto" else "Editar Produto",
                 style = MaterialTheme.typography.titleLarge
             )
         },
@@ -246,64 +105,106 @@ fun ClientEditorDialog(
                         name = it
                         nameError = false
                     },
-                    label = { Text(stringResource(R.string.label_client_name)) },
+                    label = { Text(stringResource(R.string.label_name)) },
                     isError = nameError,
                     supportingText = if (nameError) {
-                        { Text(stringResource(R.string.error_required_field)) }
+                        { Text(stringResource(R.string.error_required)) }
                     } else null,
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("client_name_input")
+                        .testTag("product_name_input")
                 )
+
                 OutlinedTextField(
-                    value = company,
-                    onValueChange = { company = it },
-                    label = { Text(stringResource(R.string.label_company)) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("client_company_input")
-                )
-                OutlinedTextField(
-                    value = segment,
-                    onValueChange = { segment = it },
-                    label = { Text(stringResource(R.string.label_segment)) },
+                    value = code,
+                    onValueChange = { code = it },
+                    label = { Text(stringResource(R.string.label_code)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = {
-                        email = it
-                        emailError = false
-                    },
-                    label = { Text(stringResource(R.string.label_email)) },
-                    isError = emailError,
-                    supportingText = if (emailError) {
-                        { Text(stringResource(R.string.error_invalid_email)) }
-                    } else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("client_email_input")
-                )
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text(stringResource(R.string.label_phone)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text(stringResource(R.string.label_notes)) },
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
+
+                Text(stringResource(R.string.label_category), style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    categories.forEach { cat ->
+                        FilterChip(
+                            selected = selectedCategoryId == cat.id,
+                            onClick = { selectedCategoryId = cat.id },
+                            leadingIcon = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(cat.colorHex))
+                                )
+                            },
+                            label = { Text(cat.name) }
+                        )
+                    }
+                }
+
+                Text(stringResource(R.string.label_unit), style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    availableUnits.forEach { u ->
+                        FilterChip(
+                            selected = unit == u,
+                            onClick = { unit = u },
+                            label = { Text(u) }
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = quantityText,
+                        onValueChange = { quantityText = it },
+                        label = { Text(stringResource(R.string.label_quantity)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("product_qty_input")
+                    )
+                    OutlinedTextField(
+                        value = minStockText,
+                        onValueChange = { minStockText = it },
+                        label = { Text(stringResource(R.string.label_min_stock)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("product_min_input")
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = priceText,
+                        onValueChange = { priceText = it },
+                        label = { Text(stringResource(R.string.label_unit_price)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("product_price_input")
+                    )
+                    OutlinedTextField(
+                        value = expiryDaysText,
+                        onValueChange = { expiryDaysText = it },
+                        label = { Text(stringResource(R.string.label_expiry_days)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("product_expiry_input")
+                    )
+                }
             }
         },
         confirmButton = {
@@ -313,25 +214,30 @@ fun ClientEditorDialog(
                         nameError = true
                         return@Button
                     }
-                    val trimmedEmail = email.trim()
-                    if (trimmedEmail.isNotEmpty() && !Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
-                        emailError = true
-                        return@Button
+                    val qty = quantityText.replace(",", ".").toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
+                    val min = minStockText.replace(",", ".").toDoubleOrNull()?.coerceAtLeast(0.0) ?: 1.0
+                    val price = priceText.replace(",", ".").toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
+                    val expiryMillis = expiryDaysText.trim().toLongOrNull()?.let { days ->
+                        System.currentTimeMillis() + days * 86_400_000L
                     }
                     onSave(
-                        ClientEntity(
-                            id = initialClient?.id ?: 0L,
+                        ProductEntity(
+                            id = initialProduct?.id ?: 0L,
+                            uniqueCode = initialProduct?.uniqueCode ?: "",
+                            code = code.trim(),
                             name = name.trim(),
-                            company = company.trim(),
-                            segment = segment.trim(),
-                            email = trimmedEmail,
-                            phone = phone.trim(),
-                            notes = notes.trim(),
-                            createdAt = initialClient?.createdAt ?: System.currentTimeMillis()
+                            categoryId = selectedCategoryId,
+                            unit = unit,
+                            quantity = qty,
+                            minStock = min,
+                            unitPrice = price,
+                            lastPaidPrice = initialProduct?.lastPaidPrice,
+                            expiryDateMillis = expiryMillis,
+                            notes = initialProduct?.notes ?: ""
                         )
                     )
                 },
-                modifier = Modifier.testTag("save_client_button")
+                modifier = Modifier.testTag("save_product_button")
             ) {
                 Text(stringResource(R.string.action_save))
             }
@@ -345,67 +251,150 @@ fun ClientEditorDialog(
 }
 
 @Composable
-fun TaskCreatorDialog(
-    onSave: (title: String, priority: TaskPriority, dueInDays: Int) -> Unit,
+fun MovementEditorDialog(
+    products: List<ProductEntity>,
+    preselectedProduct: ProductEntity?,
+    preselectedType: MovementType,
+    onConfirm: (productId: Long, type: MovementType, amountOrBalance: Double, unitPrice: Double?, reason: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var priority by remember { mutableStateOf(TaskPriority.MEDIUM) }
-    var dueDays by remember { mutableStateOf("5") }
-    var titleError by remember { mutableStateOf(false) }
+    var selectedProduct by remember {
+        mutableStateOf(preselectedProduct ?: products.firstOrNull())
+    }
+    var type by remember { mutableStateOf(preselectedType) }
+    var amountText by remember {
+        mutableStateOf(
+            if (preselectedType == MovementType.AJUSTE && selectedProduct != null) {
+                selectedProduct!!.quantity.toString()
+            } else {
+                "1"
+            }
+        )
+    }
+    var priceText by remember {
+        mutableStateOf(selectedProduct?.unitPrice?.takeIf { it > 0.0 }?.toString() ?: "")
+    }
+    var reason by remember { mutableStateOf("") }
+    var amountError by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.project_add_task), style = MaterialTheme.typography.titleLarge) },
+        title = { Text("Registrar Movimentação", style = MaterialTheme.typography.titleLarge) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = {
-                        title = it
-                        titleError = false
-                    },
-                    label = { Text(stringResource(R.string.label_title)) },
-                    isError = titleError,
-                    supportingText = if (titleError) {
-                        { Text(stringResource(R.string.error_required_field)) }
-                    } else null,
+            if (products.isEmpty()) {
+                Text("Cadastre ao menos um produto antes de registrar movimentações.")
+            } else {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("task_title_input")
-                )
-                OutlinedTextField(
-                    value = dueDays,
-                    onValueChange = { dueDays = it },
-                    label = { Text(stringResource(R.string.label_due_in_days)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(stringResource(R.string.label_priority), style = MaterialTheme.typography.labelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TaskPriority.entries.forEach { p ->
-                        FilterChip(
-                            selected = priority == p,
-                            onClick = { priority = p },
-                            label = { Text(p.label) }
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Produto", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        products.forEach { p ->
+                            FilterChip(
+                                selected = selectedProduct?.id == p.id,
+                                onClick = {
+                                    selectedProduct = p
+                                    priceText = p.unitPrice.takeIf { it > 0.0 }?.toString() ?: ""
+                                    if (type == MovementType.AJUSTE) {
+                                        amountText = p.quantity.toString()
+                                    }
+                                },
+                                label = { Text(p.name) }
+                            )
+                        }
+                    }
+
+                    selectedProduct?.let { prod ->
+                        Text(
+                            text = "Saldo atual: ${formatQty(prod.quantity)} ${prod.unit}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        MovementType.entries.forEach { t ->
+                            FilterChip(
+                                selected = type == t,
+                                onClick = { type = t },
+                                label = { Text(t.label) },
+                                modifier = Modifier.testTag("mv_type_${t.name.lowercase()}")
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = {
+                            amountText = it
+                            amountError = false
+                        },
+                        label = {
+                            Text(
+                                if (type == MovementType.AJUSTE) "Novo saldo final"
+                                else "Quantidade (${selectedProduct?.unit ?: "un"})"
+                            )
+                        },
+                        isError = amountError,
+                        supportingText = if (amountError) {
+                            { Text(stringResource(R.string.error_invalid_number)) }
+                        } else null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("mv_amount_input")
+                    )
+
+                    if (type == MovementType.ENTRADA) {
+                        OutlinedTextField(
+                            value = priceText,
+                            onValueChange = { priceText = it },
+                            label = { Text(stringResource(R.string.label_unit_price)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = reason,
+                        onValueChange = { reason = it },
+                        label = { Text(stringResource(R.string.label_reason)) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("mv_reason_input")
+                    )
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (title.isBlank()) {
-                        titleError = true
-                        return@Button
-                    }
-                    onSave(title.trim(), priority, dueDays.toIntOrNull()?.coerceAtLeast(0) ?: 5)
-                },
-                modifier = Modifier.testTag("save_task_button")
-            ) {
-                Text(stringResource(R.string.action_save))
+            if (products.isNotEmpty()) {
+                Button(
+                    onClick = {
+                        val prod = selectedProduct ?: return@Button
+                        val valNum = amountText.replace(",", ".").toDoubleOrNull()
+                        if (valNum == null || (type != MovementType.AJUSTE && valNum <= 0.0) || valNum < 0.0) {
+                            amountError = true
+                            return@Button
+                        }
+                        val priceOverride = priceText.replace(",", ".").toDoubleOrNull()
+                        onConfirm(prod.id, type, valNum, priceOverride, reason.trim())
+                    },
+                    modifier = Modifier.testTag("save_movement_button")
+                ) {
+                    Text(stringResource(R.string.action_save))
+                }
             }
         },
         dismissButton = {
@@ -417,183 +406,95 @@ fun TaskCreatorDialog(
 }
 
 @Composable
-fun TransactionEditorDialog(
-    initialTransaction: TransactionEntity?,
-    prelinkedProject: ProjectEntity?,
-    projects: List<ProjectEntity>,
-    onSave: (TransactionEntity) -> Unit,
+fun CategoryEditorDialog(
+    initialCategory: CategoryEntity?,
+    onSave: (CategoryEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var title by remember {
-        mutableStateOf(
-            initialTransaction?.title
-                ?: prelinkedProject?.let { "${it.code} Payment" }
-                ?: ""
-        )
+    var name by remember { mutableStateOf(initialCategory?.name ?: "") }
+    var sectorNote by remember { mutableStateOf(initialCategory?.sectorNote ?: "") }
+    var colorHex by remember {
+        mutableLongStateOf(initialCategory?.colorHex ?: categoryColorPalette.first())
     }
-    var type by remember {
-        mutableStateOf(initialTransaction?.type ?: TransactionType.INCOME)
-    }
-    var category by remember {
-        mutableStateOf(initialTransaction?.category ?: TransactionCategory.PROJECT_FEE)
-    }
-    var amountText by remember {
-        mutableStateOf(
-            initialTransaction?.amount?.toString()
-                ?: prelinkedProject?.budget?.takeIf { it > 0.0 }?.toString()
-                ?: ""
-        )
-    }
-    var selectedProjectId by remember {
-        mutableStateOf(initialTransaction?.projectId ?: prelinkedProject?.id)
-    }
-    var notes by remember { mutableStateOf(initialTransaction?.notes ?: "") }
-    var titleError by remember { mutableStateOf(false) }
-    var amountError by remember { mutableStateOf(false) }
+    var nameError by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (initialTransaction == null) stringResource(R.string.action_new_transaction) else "Edit Entry",
+                text = if (initialCategory == null) "Nova Categoria" else "Editar Categoria",
                 style = MaterialTheme.typography.titleLarge
             )
         },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TransactionType.entries.forEach { t ->
-                        FilterChip(
-                            selected = type == t,
-                            onClick = {
-                                type = t
-                                category = if (t == TransactionType.INCOME) {
-                                    TransactionCategory.PROJECT_FEE
-                                } else {
-                                    TransactionCategory.OPERATIONS
-                                }
-                            },
-                            label = { Text(t.label) },
-                            modifier = Modifier.testTag("tx_type_${t.name.lowercase()}")
-                        )
-                    }
-                }
-
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value = title,
+                    value = name,
                     onValueChange = {
-                        title = it
-                        titleError = false
+                        name = it
+                        nameError = false
                     },
-                    label = { Text(stringResource(R.string.label_title)) },
-                    isError = titleError,
-                    supportingText = if (titleError) {
-                        { Text(stringResource(R.string.error_required_field)) }
+                    label = { Text(stringResource(R.string.label_name)) },
+                    isError = nameError,
+                    supportingText = if (nameError) {
+                        { Text(stringResource(R.string.error_required)) }
                     } else null,
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("tx_title_input")
+                        .testTag("category_name_input")
                 )
 
                 OutlinedTextField(
-                    value = amountText,
-                    onValueChange = {
-                        amountText = it
-                        amountError = false
-                    },
-                    label = { Text(stringResource(R.string.label_amount)) },
-                    isError = amountError,
-                    supportingText = if (amountError) {
-                        { Text(stringResource(R.string.error_invalid_amount)) }
-                    } else null,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    value = sectorNote,
+                    onValueChange = { sectorNote = it },
+                    label = { Text(stringResource(R.string.label_sector_note)) },
                     singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("tx_amount_input")
-                )
-
-                Text(stringResource(R.string.label_category), style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    TransactionCategory.entries.forEach { cat ->
-                        FilterChip(
-                            selected = category == cat,
-                            onClick = { category = cat },
-                            label = { Text(cat.label) }
-                        )
-                    }
-                }
-
-                if (projects.isNotEmpty()) {
-                    Text("Link Project", style = MaterialTheme.typography.labelMedium)
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        FilterChip(
-                            selected = selectedProjectId == null,
-                            onClick = { selectedProjectId = null },
-                            label = { Text("None") }
-                        )
-                        projects.forEach { p ->
-                            FilterChip(
-                                selected = selectedProjectId == p.id,
-                                onClick = { selectedProjectId = p.id },
-                                label = { Text(p.code) }
-                            )
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text(stringResource(R.string.label_notes)) },
-                    maxLines = 2,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Text(stringResource(R.string.label_color), style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    categoryColorPalette.forEach { hex ->
+                        val isSelected = colorHex == hex
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color(hex))
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .clickable { colorHex = hex }
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (title.isBlank()) {
-                        titleError = true
+                    if (name.isBlank()) {
+                        nameError = true
                         return@Button
                     }
-                    val amount = amountText.replace(",", ".").toDoubleOrNull()
-                    if (amount == null || amount <= 0.0) {
-                        amountError = true
-                        return@Button
-                    }
-                    val linkedClient = selectedProjectId?.let { pid ->
-                        projects.find { it.id == pid }?.clientId
-                    } ?: initialTransaction?.clientId
                     onSave(
-                        TransactionEntity(
-                            id = initialTransaction?.id ?: 0L,
-                            title = title.trim(),
-                            type = type,
-                            category = category,
-                            amount = amount,
-                            projectId = selectedProjectId,
-                            clientId = linkedClient,
-                            dateMillis = initialTransaction?.dateMillis ?: System.currentTimeMillis(),
-                            notes = notes.trim(),
-                            createdAt = initialTransaction?.createdAt ?: System.currentTimeMillis()
+                        CategoryEntity(
+                            id = initialCategory?.id ?: 0L,
+                            name = name.trim(),
+                            colorHex = colorHex,
+                            sectorNote = sectorNote.trim()
                         )
                     )
                 },
-                modifier = Modifier.testTag("save_tx_button")
+                modifier = Modifier.testTag("save_category_button")
             ) {
                 Text(stringResource(R.string.action_save))
             }
@@ -607,94 +508,68 @@ fun TransactionEditorDialog(
 }
 
 @Composable
-fun WorkspaceSettingsDialog(
-    businessName: String,
-    isDarkMode: Boolean,
-    onUpdateBusinessName: (String) -> Unit,
-    onToggleDarkMode: (Boolean) -> Unit,
-    onLoadSampleData: () -> Unit,
-    onClearWorkspace: () -> Unit,
+fun UserEditorDialog(
+    onSave: (name: String, email: String, role: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var nameInput by remember { mutableStateOf(businessName) }
-    var confirmReset by remember { mutableStateOf(false) }
-
-    if (confirmReset) {
-        ConfirmationDialog(
-            title = stringResource(R.string.confirm_delete_title),
-            message = stringResource(R.string.confirm_reset_workspace),
-            onConfirm = {
-                confirmReset = false
-                onClearWorkspace()
-                onDismiss()
-            },
-            onDismiss = { confirmReset = false }
-        )
-    }
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var role by remember { mutableStateOf("Morador") }
+    var hasError by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.action_settings), style = MaterialTheme.typography.titleLarge) },
+        title = { Text("Novo Morador / Usuário", style = MaterialTheme.typography.titleLarge) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
-                    value = nameInput,
-                    onValueChange = { nameInput = it },
-                    label = { Text(stringResource(R.string.label_business_name)) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("settings_business_name_input")
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.label_dark_theme),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Switch(
-                        checked = isDarkMode,
-                        onCheckedChange = onToggleDarkMode,
-                        modifier = Modifier.testTag("settings_dark_theme_switch")
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                OutlinedButton(
-                    onClick = {
-                        onLoadSampleData()
-                        onDismiss()
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        hasError = false
                     },
+                    label = { Text(stringResource(R.string.label_name)) },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.action_load_sample_data))
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = {
+                        email = it
+                        hasError = false
+                    },
+                    label = { Text(stringResource(R.string.label_email)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Administrador", "Morador").forEach { r ->
+                        FilterChip(
+                            selected = role == r,
+                            onClick = { role = r },
+                            label = { Text(r) }
+                        )
+                    }
                 }
-
-                OutlinedButton(
-                    onClick = { confirmReset = true },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.action_clear_workspace))
+                if (hasError) {
+                    Text(
+                        text = "Informe nome e e-mail válidos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (nameInput.isNotBlank() && nameInput.trim() != businessName) {
-                        onUpdateBusinessName(nameInput.trim())
+                    if (name.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                        hasError = true
+                        return@Button
                     }
-                    onDismiss()
-                },
-                modifier = Modifier.testTag("save_settings_button")
+                    onSave(name.trim(), email.trim(), role)
+                }
             ) {
                 Text(stringResource(R.string.action_save))
             }

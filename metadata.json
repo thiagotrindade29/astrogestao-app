@@ -1,6 +1,6 @@
 {
   "name": "AstroGestão",
-  "description": "Executive business operations, client CRM, project & task tracking, and cash-flow management Android app.",
+  "description": "ERP Doméstico de estoque, reposição, vencimentos, movimentações com auditoria e finanças.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

@@ -1,12 +1,19 @@
-# AstroGestão (Android)
+# AstroGestão — ERP Doméstico (Android)
 
-An executive business operations, client CRM, project & deliverable tracking, and cash-flow management Android application built with Kotlin, Jetpack Compose, Material 3, Room, DataStore, and Navigation Compose.
+Aplicativo Android em Kotlin e Jetpack Compose para controle de estoque doméstico, compras de mercado em tempo real, leitura de código de barras, importação de NFC-e e análise financeira da casa.
 
-## Features
+## Funcionalidades
 
-- **Operations Command Dashboard**: Live KPI metrics (Net Balance, Total Revenue, Active Projects, Open Tasks), custom Compose `Canvas` monthly Income vs. Expense cash-flow chart, active project deadlines, and interactive priority task checkoffs.
-- **Projects & Service Orders**: Searchable, status-filtered project pipeline (`Planned`, `In Progress`, `Review`, `Completed`) with budgets, deadlines, completion sliders, deliverable task checklists, and direct revenue logging.
-- **Client Directory (CRM)**: Searchable client accounts with segments, contact details, account notes, linked project tracking, and total billed metrics.
-- **Cash-Flow Ledger**: Income and expense tracking with category breakdowns, net margin calculation, project linking, and transaction editing/deletion.
-- **Adaptive UI & Theme**: Edge-to-edge Material 3 layout with `NavigationBar` on compact screens, `NavigationRail` on tablets/foldables, Celestial Dark & Ivory Light theme toggle, and customizable workspace name.
-- **Local Persistence**: Offline-first Room SQLite database (`AstroRepository`) and Jetpack DataStore preferences, plus an optional one-tap sample workspace loader for exploring charts and workflows.
+- **Acesso & Cadastro de Usuários**: Tela cósmica inspirada no design Figma do AstroGestão com login (`Entrar`) e criação de novas contas (`Cadastre-se`), escolha de perfil (`Morador` / `Administrador`), hash SHA-256 de senha no Room e sessão persistida via Jetpack DataStore.
+- **Dashboard Integrado (Visão Geral do Estoque)**:
+  - KPIs em tempo real: Total de Produtos, Valor Estimado Total (`R$`), Itens em Reposição e Alertas de Vencimento Próximo (30 dias).
+  - Lista automática de **Compras / Reposição** para itens com saldo igual ou abaixo do mínimo configurado, com ação rápida `+ Repor`.
+  - Painel de **Próximos do Vencimento (30 dias)** com contagem regressiva.
+- **Modo Mercado (Frente de Caixa / Assistente em Tempo Real)**:
+  - Leitor de código de barras via câmera (`CameraX` + `ML Kit Barcode Scanning`) e entrada manual rápida.
+  - **Código Único Canônico (`AST-XXXX`) + Anti-duplicação**: cada produto recebe um código interno único e mantém uma tabela de códigos vinculados (`ProductAliasEntity`) para diferentes mercados. Ao bipar ou importar um código desconhecido, a busca normalizada por nome vincula ao mesmo item existente em vez de duplicar o cadastro.
+  - Comparação automática do preço na prateleira contra o último preço pago e opção **Guardar itens no estoque ao finalizar** (ON = atualiza saldo e auditoria; OFF = grava apenas o gasto na análise financeira).
+- **Importação de Cupom Fiscal / NFC-e**: Consulta via portal SEFAZ regional (incluindo SC `sat.sef.sc.gov.br`), leitura de URL/QR Code, chave de 44 dígitos ou upload de arquivo `.xml`.
+- **Gestão de Produtos (CRUD)**: Busca em tempo real por nome, código único `AST-XXXX` ou código de barras, filtro por categoria colorida e chave **Somente estoque baixo**.
+- **Análise Financeira**: Valor patrimonial em casa, total gasto em compras, consumo estimado, histórico de compras do Modo Mercado e gráficos em Compose `Canvas`.
+- **Movimentações com Auditoria & Categorias**: Registro de `Entrada`, `Saída` e `Ajuste de Saldo` com saldo anterior/atual, motivo, autor e setores coloridos da casa.

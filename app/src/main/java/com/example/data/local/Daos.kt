@@ -8,73 +8,109 @@ import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface ClientDao {
-    @Query("SELECT * FROM clients ORDER BY name ASC")
-    fun observeAll(): Flow<List<ClientEntity>>
+interface CategoryDao {
+    @Query("SELECT * FROM categories ORDER BY name ASC")
+    fun observeAll(): Flow<List<CategoryEntity>>
+
+    @Query("SELECT COUNT(*) FROM categories")
+    suspend fun count(): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(client: ClientEntity): Long
+    suspend fun insert(category: CategoryEntity): Long
 
     @Update
-    suspend fun update(client: ClientEntity)
+    suspend fun update(category: CategoryEntity)
 
-    @Query("DELETE FROM clients WHERE id = :id")
+    @Query("DELETE FROM categories WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("DELETE FROM clients")
+    @Query("DELETE FROM categories")
     suspend fun deleteAll()
 }
 
 @Dao
-interface ProjectDao {
-    @Query("SELECT * FROM projects ORDER BY dueDateMillis ASC, createdAt DESC")
-    fun observeAll(): Flow<List<ProjectEntity>>
+interface ProductDao {
+    @Query("SELECT * FROM products ORDER BY name ASC")
+    fun observeAll(): Flow<List<ProductEntity>>
+
+    @Query("SELECT * FROM products WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): ProductEntity?
+
+    @Query("SELECT * FROM products")
+    suspend fun getAllOnce(): List<ProductEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(project: ProjectEntity): Long
+    suspend fun insert(product: ProductEntity): Long
 
     @Update
-    suspend fun update(project: ProjectEntity)
+    suspend fun update(product: ProductEntity)
 
-    @Query("DELETE FROM projects WHERE id = :id")
+    @Query("DELETE FROM products WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("DELETE FROM projects")
+    @Query("DELETE FROM products")
     suspend fun deleteAll()
 }
 
 @Dao
-interface TaskDao {
-    @Query("SELECT * FROM tasks ORDER BY isDone ASC, priority DESC, dueDateMillis ASC")
-    fun observeAll(): Flow<List<TaskEntity>>
+interface ProductAliasDao {
+    @Query("SELECT * FROM product_aliases ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<ProductAliasEntity>>
+
+    @Query("SELECT * FROM product_aliases")
+    suspend fun getAllOnce(): List<ProductAliasEntity>
+
+    @Query("SELECT * FROM product_aliases WHERE LOWER(externalCode) = LOWER(:code) LIMIT 1")
+    suspend fun findByCode(code: String): ProductAliasEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(task: TaskEntity): Long
+    suspend fun insert(alias: ProductAliasEntity): Long
 
-    @Update
-    suspend fun update(task: TaskEntity)
-
-    @Query("DELETE FROM tasks WHERE id = :id")
-    suspend fun deleteById(id: Long)
-
-    @Query("DELETE FROM tasks")
+    @Query("DELETE FROM product_aliases")
     suspend fun deleteAll()
 }
 
 @Dao
-interface TransactionDao {
-    @Query("SELECT * FROM transactions ORDER BY dateMillis DESC, createdAt DESC")
-    fun observeAll(): Flow<List<TransactionEntity>>
+interface StockMovementDao {
+    @Query("SELECT * FROM stock_movements ORDER BY timestampMillis DESC, id DESC")
+    fun observeAll(): Flow<List<StockMovementEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(transaction: TransactionEntity): Long
+    suspend fun insert(movement: StockMovementEntity): Long
+
+    @Query("DELETE FROM stock_movements")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface MarketCheckoutDao {
+    @Query("SELECT * FROM market_checkouts ORDER BY timestampMillis DESC, id DESC")
+    fun observeAll(): Flow<List<MarketCheckoutEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(checkout: MarketCheckoutEntity): Long
+
+    @Query("DELETE FROM market_checkouts")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface HouseholdUserDao {
+    @Query("SELECT * FROM household_users ORDER BY createdAt ASC")
+    fun observeAll(): Flow<List<HouseholdUserEntity>>
+
+    @Query("SELECT * FROM household_users WHERE LOWER(email) = LOWER(:email) LIMIT 1")
+    suspend fun getByEmail(email: String): HouseholdUserEntity?
+
+    @Query("SELECT COUNT(*) FROM household_users")
+    suspend fun count(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(user: HouseholdUserEntity): Long
 
     @Update
-    suspend fun update(transaction: TransactionEntity)
+    suspend fun update(user: HouseholdUserEntity)
 
-    @Query("DELETE FROM transactions WHERE id = :id")
+    @Query("DELETE FROM household_users WHERE id = :id")
     suspend fun deleteById(id: Long)
-
-    @Query("DELETE FROM transactions")
-    suspend fun deleteAll()
 }

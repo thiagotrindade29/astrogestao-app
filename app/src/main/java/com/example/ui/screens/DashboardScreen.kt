@@ -1,11 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,54 +14,40 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AccountBalanceWallet
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AddTask
-import androidx.compose.material.icons.rounded.AssignmentTurnedIn
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.FolderOpen
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.TrendingUp
-import androidx.compose.material.icons.rounded.WorkOutline
+import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material.icons.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
-import com.example.data.local.ProjectEntity
-import com.example.data.local.TaskEntity
-import com.example.ui.components.CashFlowCanvasChart
+import com.example.data.local.ProductEntity
+import com.example.ui.components.AlertRedKpiCard
 import com.example.ui.components.EmptyStateCard
-import com.example.ui.components.KpiMetricCard
-import com.example.ui.components.PriorityBadge
-import com.example.ui.components.StatusBadge
-import com.example.ui.components.formatCurrency
-import com.example.ui.components.formatShortDate
+import com.example.ui.components.LowStockBadge
+import com.example.ui.components.MovementTypeBadge
+import com.example.ui.components.SolidKpiCard
+import com.example.ui.components.daysUntil
+import com.example.ui.components.formatBrl
+import com.example.ui.components.formatDateTimeBr
+import com.example.ui.components.formatQty
+import com.example.ui.components.formatShortDateBr
 import com.example.ui.theme.AstroTheme
 import com.example.ui.theme.JetBrainsMonoFamily
 import com.example.ui.viewmodel.AstroUiState
@@ -73,12 +55,13 @@ import com.example.ui.viewmodel.AstroUiState
 @Composable
 fun DashboardScreen(
     uiState: AstroUiState,
-    onOpenSettings: () -> Unit,
-    onNewProject: () -> Unit,
-    onNewTransaction: () -> Unit,
-    onLoadSampleData: () -> Unit,
-    onOpenProject: (Long) -> Unit,
-    onToggleTask: (TaskEntity) -> Unit,
+    onOpenCatalog: () -> Unit,
+    onOpenMarket: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenNfceImport: () -> Unit,
+    onNewProduct: () -> Unit,
+    onQuickRestock: (ProductEntity) -> Unit,
+    onLoadSampleCatalog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val extended = AstroTheme.extended
@@ -87,263 +70,265 @@ fun DashboardScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("dashboard_list"),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 92.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Executive Hero Card with bundled img_astro_hero banner
+        // Header with Ver Catálogo, Importar Cupom / NF-e, and + Novo Produto
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("dashboard_hero_card"),
-                shape = MaterialTheme.shapes.large,
-                border = BorderStroke(1.dp, extended.borderSubtle),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(206.dp)
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.img_astro_hero),
-                        contentDescription = stringResource(R.string.dashboard_hero_banner_cd),
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color(0xEE090D1A),
-                                        Color(0xBF0F1629),
-                                        Color(0x550F1629)
-                                    )
-                                )
-                            )
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(20.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val isWide = maxWidth >= 640.dp
+                if (isWide) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.dashboard_eyebrow),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = uiState.businessName,
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = Color(0xFFF8FAFC),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = stringResource(R.string.dashboard_subtitle),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFFCBD5E1),
-                                    maxLines = 2
-                                )
-                            }
-                            IconButton(
-                                onClick = onOpenSettings,
-                                modifier = Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .testTag("settings_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Settings,
-                                    contentDescription = stringResource(R.string.action_settings),
-                                    tint = Color(0xFFF8FAFC)
-                                )
-                            }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.dashboard_title),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.dashboard_subtitle),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Button(
-                                onClick = onNewProject,
-                                modifier = Modifier.testTag("hero_new_project_button"),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = onOpenCatalog,
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier.testTag("dashboard_view_catalog_button")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Add,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = stringResource(R.string.action_new_project))
+                                Text(stringResource(R.string.action_view_catalog))
                             }
                             OutlinedButton(
-                                onClick = onNewTransaction,
-                                modifier = Modifier.testTag("hero_new_transaction_button"),
-                                border = BorderStroke(1.dp, Color(0x66F8FAFC)),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color(0xFFF8FAFC)
-                                ),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                                onClick = onOpenNfceImport,
+                                shape = MaterialTheme.shapes.small,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+                                modifier = Modifier.testTag("dashboard_import_nfce_button")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.AddTask,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Icon(Icons.Rounded.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = stringResource(R.string.action_new_transaction))
+                                Text(stringResource(R.string.action_import_nfce))
                             }
+                            Button(
+                                onClick = onNewProduct,
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier.testTag("dashboard_new_product_button")
+                            ) {
+                                Text(stringResource(R.string.action_new_product))
+                            }
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = stringResource(R.string.dashboard_title),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = stringResource(R.string.dashboard_subtitle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onOpenCatalog,
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                                    .testTag("dashboard_view_catalog_button")
+                            ) {
+                                Text(stringResource(R.string.action_view_catalog))
+                            }
+                            Button(
+                                onClick = onNewProduct,
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                                    .testTag("dashboard_new_product_button")
+                            ) {
+                                Text(stringResource(R.string.action_new_product))
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = onOpenNfceImport,
+                            shape = MaterialTheme.shapes.small,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("dashboard_import_nfce_button")
+                        ) {
+                            Icon(Icons.Rounded.ReceiptLong, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_import_nfce))
                         }
                     }
                 }
             }
         }
 
-        // First-launch Empty Workspace Prompt
-        if (uiState.isWorkspaceEmpty && !uiState.isLoading) {
+        // Empty catalog onboarding option
+        if (uiState.products.isEmpty() && !uiState.isLoading) {
             item {
                 EmptyStateCard(
-                    icon = Icons.Rounded.AutoAwesome,
-                    title = stringResource(R.string.empty_workspace_title),
-                    body = stringResource(R.string.empty_workspace_body),
-                    primaryActionLabel = stringResource(R.string.action_load_sample_data),
-                    onPrimaryAction = onLoadSampleData,
-                    secondaryActionLabel = stringResource(R.string.action_new_project),
-                    onSecondaryAction = onNewProject,
+                    icon = Icons.Rounded.Inventory2,
+                    title = stringResource(R.string.products_empty_title),
+                    body = stringResource(R.string.products_empty_body),
+                    primaryActionLabel = stringResource(R.string.action_load_sample_catalog),
+                    onPrimaryAction = onLoadSampleCatalog,
+                    secondaryActionLabel = stringResource(R.string.action_import_nfce),
+                    onSecondaryAction = onOpenNfceImport,
                     testTag = "dashboard_empty_state"
                 )
             }
         }
 
-        // Responsive KPI Grid (2 columns on phones, 4 columns on wider tablets)
+        // 4 KPI Cards: Total de Produtos, Valor Estimado Total, Itens em Reposição, Alertas de Vencimento Próximo
         item {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val isWide = maxWidth >= 680.dp
-                val balanceColor = if (uiState.netBalance >= 0) extended.positive else extended.negative
-                val balanceContainer = if (uiState.netBalance >= 0) extended.positiveContainer else extended.negativeContainer
+                val isFourCol = maxWidth >= 760.dp
+                val isTwoCol = maxWidth >= 420.dp
 
-                if (isWide) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        KpiMetricCard(
-                            title = stringResource(R.string.kpi_net_balance),
-                            value = formatCurrency(uiState.netBalance),
-                            subtitle = "${uiState.profitMarginPercent}% margin",
-                            icon = Icons.Rounded.AccountBalanceWallet,
-                            accentColor = balanceColor,
-                            accentContainer = balanceContainer,
-                            modifier = Modifier.weight(1f),
-                            testTag = "kpi_net_balance"
-                        )
-                        KpiMetricCard(
-                            title = stringResource(R.string.kpi_total_revenue),
-                            value = formatCurrency(uiState.totalIncome),
-                            subtitle = "${uiState.transactions.size} entries",
-                            icon = Icons.Rounded.TrendingUp,
-                            accentColor = MaterialTheme.colorScheme.primary,
-                            accentContainer = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.weight(1f),
-                            testTag = "kpi_total_revenue"
-                        )
-                        KpiMetricCard(
-                            title = stringResource(R.string.kpi_active_projects),
-                            value = uiState.activeProjectCount.toString(),
-                            subtitle = "${uiState.projects.size} total orders",
-                            icon = Icons.Rounded.WorkOutline,
-                            accentColor = extended.info,
-                            accentContainer = extended.infoContainer,
-                            modifier = Modifier.weight(1f),
-                            testTag = "kpi_active_projects"
-                        )
-                        KpiMetricCard(
-                            title = stringResource(R.string.kpi_open_tasks),
-                            value = uiState.openTaskCount.toString(),
-                            subtitle = "${uiState.clients.size} clients",
-                            icon = Icons.Rounded.AssignmentTurnedIn,
-                            accentColor = extended.review,
-                            accentContainer = extended.reviewContainer,
-                            modifier = Modifier.weight(1f),
-                            testTag = "kpi_open_tasks"
-                        )
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val card1: @Composable (Modifier) -> Unit = { mod ->
+                    SolidKpiCard(
+                        label = stringResource(R.string.kpi_registered_products),
+                        value = uiState.registeredProductCount.toString(),
+                        subtitle = stringResource(R.string.kpi_registered_sub, formatQty(uiState.totalUnitsInStock)),
+                        containerColor = extended.kpiNavy,
+                        modifier = mod,
+                        testTag = "kpi_products_count"
+                    )
+                }
+                val card2: @Composable (Modifier) -> Unit = { mod ->
+                    SolidKpiCard(
+                        label = stringResource(R.string.kpi_estimated_value),
+                        value = formatBrl(uiState.totalEstimatedValue),
+                        subtitle = stringResource(R.string.kpi_estimated_sub),
+                        containerColor = extended.kpiEmerald,
+                        modifier = mod,
+                        testTag = "kpi_estimated_value"
+                    )
+                }
+                val card3: @Composable (Modifier) -> Unit = { mod ->
+                    SolidKpiCard(
+                        label = stringResource(R.string.kpi_restock_alerts),
+                        value = uiState.restockAlertsCount.toString(),
+                        subtitle = stringResource(R.string.kpi_restock_sub),
+                        containerColor = extended.kpiBlue,
+                        modifier = mod,
+                        testTag = "kpi_restock_count"
+                    )
+                }
+                val card4: @Composable (Modifier) -> Unit = { mod ->
+                    AlertRedKpiCard(
+                        label = stringResource(R.string.kpi_expiry_alerts),
+                        value = uiState.expiringIn30Days.size.toString(),
+                        subtitle = stringResource(R.string.kpi_expiring_sub),
+                        modifier = mod,
+                        testTag = "kpi_expiry_alerts"
+                    )
+                }
+
+                when {
+                    isFourCol -> {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            KpiMetricCard(
-                                title = stringResource(R.string.kpi_net_balance),
-                                value = formatCurrency(uiState.netBalance),
-                                subtitle = "${uiState.profitMarginPercent}% margin",
-                                icon = Icons.Rounded.AccountBalanceWallet,
-                                accentColor = balanceColor,
-                                accentContainer = balanceContainer,
-                                modifier = Modifier.weight(1f),
-                                testTag = "kpi_net_balance"
-                            )
-                            KpiMetricCard(
-                                title = stringResource(R.string.kpi_total_revenue),
-                                value = formatCurrency(uiState.totalIncome),
-                                subtitle = "${uiState.transactions.size} entries",
-                                icon = Icons.Rounded.TrendingUp,
-                                accentColor = MaterialTheme.colorScheme.primary,
-                                accentContainer = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.weight(1f),
-                                testTag = "kpi_total_revenue"
-                            )
+                            card1(Modifier.weight(1f))
+                            card2(Modifier.weight(1f))
+                            card3(Modifier.weight(1f))
+                            card4(Modifier.weight(1f))
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            KpiMetricCard(
-                                title = stringResource(R.string.kpi_active_projects),
-                                value = uiState.activeProjectCount.toString(),
-                                subtitle = "${uiState.projects.size} total orders",
-                                icon = Icons.Rounded.WorkOutline,
-                                accentColor = extended.info,
-                                accentContainer = extended.infoContainer,
-                                modifier = Modifier.weight(1f),
-                                testTag = "kpi_active_projects"
-                            )
-                            KpiMetricCard(
-                                title = stringResource(R.string.kpi_open_tasks),
-                                value = uiState.openTaskCount.toString(),
-                                subtitle = "${uiState.clients.size} clients",
-                                icon = Icons.Rounded.AssignmentTurnedIn,
-                                accentColor = extended.review,
-                                accentContainer = extended.reviewContainer,
-                                modifier = Modifier.weight(1f),
-                                testTag = "kpi_open_tasks"
-                            )
+                    }
+                    isTwoCol -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                card1(Modifier.weight(1f))
+                                card2(Modifier.weight(1f))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                card3(Modifier.weight(1f))
+                                card4(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    else -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            card1(Modifier.fillMaxWidth())
+                            card2(Modifier.fillMaxWidth())
+                            card3(Modifier.fillMaxWidth())
+                            card4(Modifier.fillMaxWidth())
                         }
                     }
                 }
             }
         }
 
-        // Cash Flow Pulse Canvas Chart
-        if (uiState.transactions.isNotEmpty()) {
+        // Restock & Expiry Panels (side-by-side on wide screens, stacked on phones)
+        item {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val sideBySide = maxWidth >= 700.dp
+                if (sideBySide) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        RestockListCard(
+                            uiState = uiState,
+                            onSeeAll = onOpenMarket,
+                            onQuickRestock = onQuickRestock,
+                            modifier = Modifier.weight(1f)
+                        )
+                        ExpiringSoonCard(
+                            uiState = uiState,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        RestockListCard(
+                            uiState = uiState,
+                            onSeeAll = onOpenMarket,
+                            onQuickRestock = onQuickRestock,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        ExpiringSoonCard(
+                            uiState = uiState,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        }
+
+        // Recent Audited Movements Section
+        if (uiState.movements.isNotEmpty()) {
             item {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("cash_flow_chart_card"),
+                        .testTag("dashboard_recent_movements_card"),
                     shape = MaterialTheme.shapes.medium,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, extended.borderSubtle)
@@ -351,213 +336,319 @@ fun DashboardScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = stringResource(R.string.section_cash_flow_pulse),
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = stringResource(R.string.section_recent_movements),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = stringResource(R.string.section_cash_flow_subtitle),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            TextButton(onClick = onOpenHistory) {
+                                Text(stringResource(R.string.action_see_history))
+                            }
                         }
-                        CashFlowCanvasChart(points = uiState.monthlyCashFlow)
+
+                        uiState.movements.take(4).forEach { mv ->
+                            val sign = if (mv.quantityDelta >= 0) "+" else ""
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            MovementTypeBadge(type = mv.type)
+                                            Text(
+                                                text = mv.productNameSnapshot,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text(
+                                            text = "${mv.reason} • ${formatDateTimeBr(mv.timestampMillis)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = "$sign${formatQty(mv.quantityDelta)} ${mv.productUnitSnapshot}",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontFamily = JetBrainsMonoFamily),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = formatBrl(mv.totalValue),
+                                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-
-        // Active Deadlines Section
-        if (uiState.upcomingProjects.isNotEmpty()) {
-            item {
-                Text(
-                    text = stringResource(R.string.section_upcoming_projects),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            items(uiState.upcomingProjects, key = { "dash_proj_${it.id}" }) { project ->
-                DashboardProjectRow(
-                    project = project,
-                    clientName = project.clientId?.let { uiState.clientMap[it]?.company ?: uiState.clientMap[it]?.name },
-                    onClick = { onOpenProject(project.id) }
-                )
-            }
-        }
-
-        // Priority Deliverables Section
-        if (uiState.priorityOpenTasks.isNotEmpty()) {
-            item {
-                Text(
-                    text = stringResource(R.string.section_priority_tasks),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            items(uiState.priorityOpenTasks, key = { "dash_task_${it.id}" }) { task ->
-                val projectTitle = uiState.projectMap[task.projectId]?.code ?: ""
-                DashboardTaskRow(
-                    task = task,
-                    projectCode = projectTitle,
-                    onToggle = { onToggleTask(task) },
-                    onOpenProject = { onOpenProject(task.projectId) }
-                )
-            }
-        }
-
-        item { Spacer(modifier = Modifier.height(72.dp)) }
     }
 }
 
 @Composable
-private fun DashboardProjectRow(
-    project: ProjectEntity,
-    clientName: String?,
-    onClick: () -> Unit
+private fun RestockListCard(
+    uiState: AstroUiState,
+    onSeeAll: () -> Unit,
+    onQuickRestock: (ProductEntity) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val extended = AstroTheme.extended
+    val lowStock = uiState.lowStockProducts
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
-            .testTag("dashboard_project_${project.id}"),
+        modifier = modifier.testTag("restock_panel_card"),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, AstroTheme.extended.borderSubtle)
+        border = BorderStroke(1.dp, extended.borderSubtle)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = project.code,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        text = stringResource(R.string.section_restock_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = project.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = stringResource(R.string.section_restock_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                StatusBadge(status = project.status)
+                TextButton(
+                    onClick = onSeeAll,
+                    modifier = Modifier.testTag("restock_see_all_button")
+                ) {
+                    Text(stringResource(R.string.action_see_all))
+                }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = clientName ?: stringResource(R.string.project_client_unassigned),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${stringResource(R.string.project_due_label)} ${formatShortDate(project.dueDateMillis)} • ${project.progressPercent}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (lowStock.isEmpty()) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, extended.borderSubtle),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = stringResource(R.string.restock_empty_msg),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(18.dp)
+                    )
+                }
+            } else {
+                lowStock.take(6).forEach { product ->
+                    val catName = product.categoryId?.let { uiState.categoryMap[it]?.name } ?: "Sem categoria"
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, extended.borderSubtle),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("restock_item_${product.id}")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = product.name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    LowStockBadge()
+                                }
+                                Text(
+                                    text = "$catName • Atual: ${formatQty(product.quantity)} ${product.unit} (mín: ${formatQty(product.minStock)})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { onQuickRestock(product) },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, extended.positive.copy(alpha = 0.5f)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .testTag("quick_restock_${product.id}")
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.action_restock_short),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = extended.positive
+                                )
+                            }
+                        }
+                    }
+                }
             }
-
-            LinearProgressIndicator(
-                progress = { (project.progressPercent / 100f).coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(999.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
         }
     }
 }
 
 @Composable
-private fun DashboardTaskRow(
-    task: TaskEntity,
-    projectCode: String,
-    onToggle: () -> Unit,
-    onOpenProject: () -> Unit
+private fun ExpiringSoonCard(
+    uiState: AstroUiState,
+    modifier: Modifier = Modifier
 ) {
+    val extended = AstroTheme.extended
+    val expiring = uiState.expiringIn30Days
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onOpenProject)
-            .testTag("dashboard_task_${task.id}"),
+        modifier = modifier.testTag("expiring_panel_card"),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, AstroTheme.extended.borderSubtle)
+        border = BorderStroke(1.dp, extended.borderSubtle)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            IconButton(
-                onClick = onToggle,
-                modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .testTag("toggle_task_${task.id}")
-            ) {
-                Icon(
-                    imageVector = if (task.isDone) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                    contentDescription = if (task.isDone) "Mark incomplete" else "Mark completed",
-                    tint = if (task.isDone) AstroTheme.extended.positive else MaterialTheme.colorScheme.primary
+            Column {
+                Text(
+                    text = stringResource(R.string.section_expiring_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.section_expiring_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = task.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+
+            if (expiring.isEmpty()) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, extended.borderSubtle),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (projectCode.isNotBlank()) {
-                        Text(
-                            text = projectCode,
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                    PriorityBadge(priority = task.priority)
                     Text(
-                        text = formatShortDate(task.dueDateMillis),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.expiring_empty_msg),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(20.dp)
                     )
+                }
+            } else {
+                expiring.forEach { product ->
+                    val expiryMillis = product.expiryDateMillis ?: return@forEach
+                    val days = daysUntil(expiryMillis)
+                    val isExpired = days < 0
+                    val daysLabel = when {
+                        isExpired -> "Vencido há ${-days}d"
+                        days == 0 -> "Vence hoje"
+                        else -> "Vence em $days d"
+                    }
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (isExpired || days <= 7) extended.negativeContainer.copy(alpha = 0.45f)
+                        else extended.warningContainer.copy(alpha = 0.45f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isExpired || days <= 7) extended.negative.copy(alpha = 0.3f)
+                            else extended.warning.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("expiring_item_${product.id}")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.WarningAmber,
+                                    contentDescription = daysLabel,
+                                    tint = if (isExpired || days <= 7) extended.negative else extended.warning
+                                )
+                                Column {
+                                    Text(
+                                        text = product.name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Validade: ${formatShortDateBr(expiryMillis)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Text(
+                                text = daysLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (isExpired || days <= 7) extended.negative else extended.warning,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }

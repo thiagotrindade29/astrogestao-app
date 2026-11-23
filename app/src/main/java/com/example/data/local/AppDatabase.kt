@@ -8,20 +8,24 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [
-        ClientEntity::class,
-        ProjectEntity::class,
-        TaskEntity::class,
-        TransactionEntity::class
+        CategoryEntity::class,
+        ProductEntity::class,
+        ProductAliasEntity::class,
+        StockMovementEntity::class,
+        MarketCheckoutEntity::class,
+        HouseholdUserEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun clientDao(): ClientDao
-    abstract fun projectDao(): ProjectDao
-    abstract fun taskDao(): TaskDao
-    abstract fun transactionDao(): TransactionDao
+    abstract fun categoryDao(): CategoryDao
+    abstract fun productDao(): ProductDao
+    abstract fun productAliasDao(): ProductAliasDao
+    abstract fun stockMovementDao(): StockMovementDao
+    abstract fun marketCheckoutDao(): MarketCheckoutDao
+    abstract fun householdUserDao(): HouseholdUserDao
 
     companion object {
         @Volatile
@@ -32,8 +36,11 @@ abstract class AppDatabase : RoomDatabase() {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "astrogestao.db"
-                ).build().also { INSTANCE = it }
+                    "astrogestao_erp.db"
+                )
+                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,8 +36,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -43,96 +51,145 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
-import com.example.data.local.ProjectStatus
-import com.example.data.local.TaskPriority
+import com.example.data.local.MovementType
 import com.example.ui.theme.AstroTheme
 import com.example.ui.theme.JetBrainsMonoFamily
-import com.example.ui.viewmodel.MonthlyCashFlowPoint
+import com.example.ui.viewmodel.MonthlySpendingPoint
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 
-fun formatCurrency(amount: Double): String {
-    val formatter = NumberFormat.getCurrencyInstance(Locale.US)
+private val ptBrLocale = Locale("pt", "BR")
+
+fun formatBrl(amount: Double): String {
+    val formatter = NumberFormat.getCurrencyInstance(ptBrLocale)
     return formatter.format(amount)
 }
 
-fun formatShortDate(millis: Long): String {
-    val formatter = SimpleDateFormat("MMM dd", Locale.getDefault())
-    return formatter.format(Date(millis))
+fun formatQty(qty: Double): String {
+    val symbols = DecimalFormatSymbols(ptBrLocale)
+    val df = DecimalFormat("#,##0.##", symbols)
+    return df.format(qty)
+}
+
+fun formatShortDateBr(millis: Long): String {
+    val fmt = SimpleDateFormat("dd/MM/yyyy", ptBrLocale)
+    return fmt.format(Date(millis))
+}
+
+fun formatDateTimeBr(millis: Long): String {
+    val fmt = SimpleDateFormat("dd/MM HH:mm", ptBrLocale)
+    return fmt.format(Date(millis))
+}
+
+fun daysUntil(expiryMillis: Long): Int {
+    val diff = expiryMillis - System.currentTimeMillis()
+    return (diff / 86_400_000L).toInt()
 }
 
 @Composable
-fun KpiMetricCard(
-    title: String,
+fun AstroBrandLogo(
+    modifier: Modifier = Modifier,
+    sizeDp: Int = 38
+) {
+    Box(
+        modifier = modifier
+            .size(sizeDp.dp)
+            .clip(RoundedCornerShape((sizeDp * 0.30f).dp))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF8B5CF6), Color(0xFF2563EB))
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(sizeDp.dp)) {
+            val w = size.width
+            val h = size.height
+            // Orbital ring (64x64 reference: cx=32, cy=32, rx=26, ry=10.5, rotate=-32)
+            rotate(degrees = -32f, pivot = Offset(w * 0.5f, h * 0.5f)) {
+                drawOval(
+                    color = Color(0xFFC4B5FD).copy(alpha = 0.9f),
+                    topLeft = Offset(w * (6f / 64f), h * (21.5f / 64f)),
+                    size = Size(w * (52f / 64f), h * (21f / 64f)),
+                    style = Stroke(width = w * (2f / 64f))
+                )
+            }
+            // Stylized A letterform: m22 43 10-25 10 25 M26 34 h12
+            val path = Path().apply {
+                moveTo(w * (22f / 64f), h * (43f / 64f))
+                lineTo(w * (32f / 64f), h * (18f / 64f))
+                lineTo(w * (42f / 64f), h * (43f / 64f))
+                moveTo(w * (26f / 64f), h * (34f / 64f))
+                lineTo(w * (38f / 64f), h * (34f / 64f))
+            }
+            drawPath(
+                path = path,
+                brush = Brush.linearGradient(
+                    colors = listOf(Color.White, Color(0xFFDBEAFE))
+                ),
+                style = Stroke(
+                    width = w * (4f / 64f),
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
+            // Orbiting star dot (51, 18, r=3)
+            drawCircle(
+                color = Color.White,
+                radius = w * (3f / 64f),
+                center = Offset(w * (51f / 64f), h * (18f / 64f))
+            )
+        }
+    }
+}
+
+@Composable
+fun SolidKpiCard(
+    label: String,
     value: String,
     subtitle: String,
-    icon: ImageVector,
-    accentColor: Color,
-    accentContainer: Color,
+    containerColor: Color,
     modifier: Modifier = Modifier,
-    testTag: String = "kpi_card"
+    testTag: String = "kpi_solid"
 ) {
     Card(
         modifier = modifier.testTag(testTag),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        border = BorderStroke(1.dp, AstroTheme.extended.borderSubtle),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(accentContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = title,
-                        tint = accentColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.82f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleLarge.copy(
+                style = MaterialTheme.typography.headlineMedium.copy(
                     fontFamily = JetBrainsMonoFamily,
                     fontWeight = FontWeight.Bold
                 ),
-                color = MaterialTheme.colorScheme.onSurface,
+                color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = accentColor,
+                color = Color.White.copy(alpha = 0.80f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -141,41 +198,91 @@ fun KpiMetricCard(
 }
 
 @Composable
-fun StatusBadge(
-    status: ProjectStatus,
-    modifier: Modifier = Modifier
+fun AlertRedKpiCard(
+    label: String,
+    value: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    testTag: String = "kpi_alert_red"
 ) {
     val extended = AstroTheme.extended
-    val (textColor, bgColor) = when (status) {
-        ProjectStatus.PLANNED -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant
-        ProjectStatus.IN_PROGRESS -> extended.info to extended.infoContainer
-        ProjectStatus.REVIEW -> extended.review to extended.reviewContainer
-        ProjectStatus.COMPLETED -> extended.positive to extended.positiveContainer
+    Card(
+        modifier = modifier.testTag(testTag),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, extended.borderSubtle),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
+                    .fillMaxHeight()
+                    .background(extended.negative)
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = extended.negative,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontFamily = JetBrainsMonoFamily,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
+}
+
+@Composable
+fun LowStockBadge(modifier: Modifier = Modifier) {
+    val extended = AstroTheme.extended
     Surface(
         modifier = modifier,
-        color = bgColor,
+        color = extended.warningContainer,
         shape = RoundedCornerShape(999.dp)
     ) {
         Text(
-            text = status.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = textColor,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            text = stringResource(R.string.badge_low_stock),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = extended.warning,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
 }
 
 @Composable
-fun PriorityBadge(
-    priority: TaskPriority,
-    modifier: Modifier = Modifier
-) {
+fun MovementTypeBadge(type: MovementType, modifier: Modifier = Modifier) {
     val extended = AstroTheme.extended
-    val (textColor, bgColor) = when (priority) {
-        TaskPriority.HIGH -> extended.negative to extended.negativeContainer
-        TaskPriority.MEDIUM -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.primaryContainer
-        TaskPriority.LOW -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant
+    val (label, textColor, bgColor) = when (type) {
+        MovementType.ENTRADA -> Triple("ENTRADA", extended.positive, extended.positiveContainer)
+        MovementType.SAIDA -> Triple("SAÍDA", extended.negative, extended.negativeContainer)
+        MovementType.AJUSTE -> Triple("AJUSTE", extended.info, extended.infoContainer)
     }
     Surface(
         modifier = modifier,
@@ -183,21 +290,53 @@ fun PriorityBadge(
         shape = RoundedCornerShape(6.dp)
     ) {
         Text(
-            text = priority.label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = textColor,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
 }
 
 @Composable
-fun CashFlowCanvasChart(
-    points: List<MonthlyCashFlowPoint>,
+fun CategoryPill(
+    name: String,
+    colorHex: Long,
     modifier: Modifier = Modifier
 ) {
-    val incomeColor = AstroTheme.extended.positive
-    val expenseColor = AstroTheme.extended.negative
+    val dotColor = Color(colorHex)
+    Surface(
+        modifier = modifier,
+        color = dotColor.copy(alpha = 0.12f),
+        shape = RoundedCornerShape(999.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+fun MonthlySpendingCanvasChart(
+    points: List<MonthlySpendingPoint>,
+    modifier: Modifier = Modifier
+) {
+    val purchasesColor = MaterialTheme.colorScheme.primary
+    val consumptionColor = AstroTheme.extended.positive
     val gridColor = AstroTheme.extended.borderSubtle
 
     Column(
@@ -209,8 +348,8 @@ fun CashFlowCanvasChart(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            LegendDot(color = incomeColor, label = stringResource(R.string.finance_income_label))
-            LegendDot(color = expenseColor, label = stringResource(R.string.finance_expense_label))
+            LegendDot(color = purchasesColor, label = "Compras (Entradas)")
+            LegendDot(color = consumptionColor, label = "Consumo (Saídas)")
         }
 
         Canvas(
@@ -221,20 +360,19 @@ fun CashFlowCanvasChart(
             if (points.isEmpty()) return@Canvas
 
             val maxVal = max(
-                100.0,
-                points.maxOf { max(it.income, it.expense) }
+                20.0,
+                points.maxOf { max(it.purchases, it.consumption) }
             ).toFloat()
 
             val topPad = 12f
             val bottomPad = 8f
             val chartHeight = (size.height - topPad - bottomPad).coerceAtLeast(10f)
 
-            // Draw subtle dashed horizontal grid lines
             val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
             for (step in 0..2) {
                 val y = topPad + chartHeight * (step / 2f)
                 drawLine(
-                    color = gridColor.copy(alpha = 0.55f),
+                    color = gridColor.copy(alpha = 0.7f),
                     start = Offset(0f, y),
                     end = Offset(size.width, y),
                     strokeWidth = 1.5f,
@@ -248,27 +386,27 @@ fun CashFlowCanvasChart(
 
             points.forEachIndexed { index, pt ->
                 val centerX = groupWidth * index + groupWidth / 2f
-                val incomeHeight = ((pt.income.toFloat() / maxVal) * chartHeight).coerceAtLeast(
-                    if (pt.income > 0.0) 6f else 2f
+                val buyHeight = ((pt.purchases.toFloat() / maxVal) * chartHeight).coerceAtLeast(
+                    if (pt.purchases > 0.0) 6f else 2f
                 )
-                val expenseHeight = ((pt.expense.toFloat() / maxVal) * chartHeight).coerceAtLeast(
-                    if (pt.expense > 0.0) 6f else 2f
+                val consHeight = ((pt.consumption.toFloat() / maxVal) * chartHeight).coerceAtLeast(
+                    if (pt.consumption > 0.0) 6f else 2f
                 )
 
-                val incomeLeft = centerX - barWidth - gap / 2f
-                val expenseLeft = centerX + gap / 2f
+                val buyLeft = centerX - barWidth - gap / 2f
+                val consLeft = centerX + gap / 2f
                 val baseBottom = topPad + chartHeight
 
                 drawRoundRect(
-                    color = incomeColor,
-                    topLeft = Offset(incomeLeft, baseBottom - incomeHeight),
-                    size = Size(barWidth, incomeHeight),
+                    color = purchasesColor,
+                    topLeft = Offset(buyLeft, baseBottom - buyHeight),
+                    size = Size(barWidth, buyHeight),
                     cornerRadius = CornerRadius(6f, 6f)
                 )
                 drawRoundRect(
-                    color = expenseColor,
-                    topLeft = Offset(expenseLeft, baseBottom - expenseHeight),
-                    size = Size(barWidth, expenseHeight),
+                    color = consumptionColor,
+                    topLeft = Offset(consLeft, baseBottom - consHeight),
+                    size = Size(barWidth, consHeight),
                     cornerRadius = CornerRadius(6f, 6f)
                 )
             }
@@ -334,11 +472,11 @@ fun EmptyStateCard(
                 .fillMaxWidth()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(54.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
@@ -347,7 +485,7 @@ fun EmptyStateCard(
                     imageVector = icon,
                     contentDescription = title,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
             Text(
@@ -398,18 +536,14 @@ fun ConfirmationDialog(
                 tint = MaterialTheme.colorScheme.error
             )
         },
-        title = {
-            Text(text = title, style = MaterialTheme.typography.titleLarge)
-        },
-        text = {
-            Text(text = message, style = MaterialTheme.typography.bodyMedium)
-        },
+        title = { Text(text = title, style = MaterialTheme.typography.titleLarge) },
+        text = { Text(text = message, style = MaterialTheme.typography.bodyMedium) },
         confirmButton = {
             Button(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
+                    contentColor = Color.White
                 ),
                 modifier = Modifier.testTag("confirm_delete_button")
             ) {

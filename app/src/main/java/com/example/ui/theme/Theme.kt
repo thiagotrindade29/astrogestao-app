@@ -15,99 +15,96 @@ data class AstroExtendedColors(
     val positiveContainer: Color,
     val negative: Color,
     val negativeContainer: Color,
+    val warning: Color,
+    val warningContainer: Color,
     val info: Color,
     val infoContainer: Color,
-    val review: Color,
-    val reviewContainer: Color,
-    val borderSubtle: Color
-)
-
-private val DarkExtendedColors = AstroExtendedColors(
-    positive = EmeraldPulse,
-    positiveContainer = EmeraldContainer,
-    negative = CoralAlert,
-    negativeContainer = CoralContainer,
-    info = OrbitalCyan,
-    infoContainer = OrbitalCyanContainer,
-    review = VioletReview,
-    reviewContainer = VioletContainer,
-    borderSubtle = BorderIndigo
+    val borderSubtle: Color,
+    val kpiNavy: Color,
+    val kpiBlue: Color,
+    val kpiEmerald: Color
 )
 
 private val LightExtendedColors = AstroExtendedColors(
-    positive = LightEmerald,
-    positiveContainer = LightEmeraldContainer,
-    negative = LightCoral,
-    negativeContainer = LightCoralContainer,
-    info = DeepTeal,
-    infoContainer = DeepTealContainer,
-    review = RoyalIndigo,
-    reviewContainer = RoyalIndigoContainer,
-    borderSubtle = LightBorder
+    positive = PositiveEmerald,
+    positiveContainer = PositiveEmeraldBg,
+    negative = AlertRed,
+    negativeContainer = AlertRedContainer,
+    warning = LowStockAmberText,
+    warningContainer = LowStockAmberBg,
+    info = AdjustmentBlue,
+    infoContainer = AdjustmentBlueBg,
+    borderSubtle = BorderLight,
+    kpiNavy = KpiNavyBg,
+    kpiBlue = KpiBlueBg,
+    kpiEmerald = KpiEmeraldBg
 )
 
-val LocalAstroColors = staticCompositionLocalOf { DarkExtendedColors }
-
-private val DarkColorScheme = darkColorScheme(
-    primary = AstralGold,
-    onPrimary = OnAstralGold,
-    primaryContainer = AstralGoldContainer,
-    onPrimaryContainer = SoftGoldText,
-    secondary = OrbitalCyan,
-    onSecondary = MidnightVoid,
-    secondaryContainer = OrbitalCyanContainer,
-    onSecondaryContainer = SoftCyanText,
-    tertiary = VioletReview,
-    onTertiary = MidnightVoid,
-    tertiaryContainer = VioletContainer,
-    onTertiaryContainer = StarlightWhite,
-    background = MidnightVoid,
-    onBackground = StarlightWhite,
-    surface = DeepSpace,
-    onSurface = StarlightWhite,
-    surfaceVariant = SlateNebula,
-    onSurfaceVariant = MutedSlate,
-    surfaceContainerLowest = MidnightVoid,
-    surfaceContainerLow = DeepSpace,
-    surfaceContainer = SlateNebula,
-    surfaceContainerHigh = ElevatedIndigo,
-    outline = BorderIndigo,
-    outlineVariant = SlateNebula,
-    error = CoralAlert,
-    onError = StarlightWhite,
-    errorContainer = CoralContainer,
-    onErrorContainer = StarlightWhite
+private val DarkExtendedColors = AstroExtendedColors(
+    positive = Color(0xFF34D399),
+    positiveContainer = Color(0xFF064E3B),
+    negative = Color(0xFFFB7185),
+    negativeContainer = Color(0xFF4C0519),
+    warning = Color(0xFFFBBF24),
+    warningContainer = Color(0xFF451A03),
+    info = Color(0xFF60A5FA),
+    infoContainer = Color(0xFF1E3A8A),
+    borderSubtle = DarkSpaceBorder,
+    kpiNavy = Color(0xFF162040),
+    kpiBlue = Color(0xFF1E40AF),
+    kpiEmerald = Color(0xFF065F46)
 )
+
+val LocalAstroColors = staticCompositionLocalOf { LightExtendedColors }
 
 private val LightColorScheme = lightColorScheme(
-    primary = RoyalIndigo,
-    onPrimary = CrispWhite,
-    primaryContainer = RoyalIndigoContainer,
-    onPrimaryContainer = RoyalIndigo,
-    secondary = WarmAmber,
-    onSecondary = CrispWhite,
-    secondaryContainer = WarmAmberContainer,
-    onSecondaryContainer = WarmAmber,
-    tertiary = DeepTeal,
-    onTertiary = CrispWhite,
-    tertiaryContainer = DeepTealContainer,
-    onTertiaryContainer = DeepTeal,
-    background = IvoryCanvas,
-    onBackground = InkDark,
-    surface = CrispWhite,
-    onSurface = InkDark,
-    surfaceVariant = SoftMist,
-    onSurfaceVariant = SlateText,
-    surfaceContainerLowest = CrispWhite,
-    surfaceContainerLow = IvoryCanvas,
-    surfaceContainer = SoftMist,
-    surfaceContainerHigh = Color(0xFFE4E9F4),
-    outline = LightBorder,
-    outlineVariant = SoftMist,
-    error = LightCoral,
-    onError = CrispWhite,
-    errorContainer = LightCoralContainer,
-    onErrorContainer = LightCoral
+    primary = CosmicPurple,
+    onPrimary = Color.White,
+    primaryContainer = CosmicPurpleLight,
+    onPrimaryContainer = CosmicPurple,
+    secondary = KpiBlueBg,
+    onSecondary = Color.White,
+    secondaryContainer = AdjustmentBlueBg,
+    onSecondaryContainer = AdjustmentBlue,
+    tertiary = KpiEmeraldBg,
+    onTertiary = Color.White,
+    background = WorkspaceBg,
+    onBackground = InkPrimary,
+    surface = CardWhite,
+    onSurface = InkPrimary,
+    surfaceVariant = SurfaceMuted,
+    onSurfaceVariant = SlateMuted,
+    outline = BorderLight,
+    outlineVariant = SurfaceMuted,
+    error = AlertRed,
+    onError = Color.White,
+    errorContainer = AlertRedContainer,
+    onErrorContainer = AlertRed
+)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = DarkPurple,
+    onPrimary = DarkSpaceBg,
+    primaryContainer = DarkPurpleContainer,
+    onPrimaryContainer = Color(0xFFE0E7FF),
+    secondary = Color(0xFF60A5FA),
+    onSecondary = DarkSpaceBg,
+    secondaryContainer = Color(0xFF1E3A8A),
+    onSecondaryContainer = Color(0xFFDBEAFE),
+    tertiary = Color(0xFF34D399),
+    onTertiary = DarkSpaceBg,
+    background = DarkSpaceBg,
+    onBackground = DarkStarlight,
+    surface = DarkSpaceSurface,
+    onSurface = DarkStarlight,
+    surfaceVariant = DarkSpaceElevated,
+    onSurfaceVariant = DarkMuted,
+    outline = DarkSpaceBorder,
+    outlineVariant = DarkSpaceElevated,
+    error = Color(0xFFFB7185),
+    onError = DarkSpaceBg,
+    errorContainer = Color(0xFF4C0519),
+    onErrorContainer = Color(0xFFFFE4E6)
 )
 
 object AstroTheme {
@@ -117,7 +114,7 @@ object AstroTheme {
 
 @Composable
 fun AstroGestaoTheme(
-    darkTheme: Boolean = true,
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme

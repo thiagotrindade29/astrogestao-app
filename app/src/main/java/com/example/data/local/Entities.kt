@@ -5,121 +5,120 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-enum class ProjectStatus(val label: String) {
-    PLANNED("Planned"),
-    IN_PROGRESS("In Progress"),
-    REVIEW("Review"),
-    COMPLETED("Completed")
+enum class MovementType(val label: String) {
+    ENTRADA("Entrada (Compra)"),
+    SAIDA("Saída (Consumo)"),
+    AJUSTE("Ajuste de Saldo")
 }
 
-enum class TaskPriority(val label: String) {
-    LOW("Low"),
-    MEDIUM("Medium"),
-    HIGH("High")
-}
-
-enum class TransactionType(val label: String) {
-    INCOME("Income"),
-    EXPENSE("Expense")
-}
-
-enum class TransactionCategory(val label: String, val isIncomeDefault: Boolean) {
-    PROJECT_FEE("Project Fee", true),
-    RETAINER("Retainer", true),
-    CONSULTING("Consulting", true),
-    SOFTWARE("Software & Cloud", false),
-    OPERATIONS("Operations", false),
-    PAYROLL("Team & Contractors", false),
-    MARKETING("Marketing", false),
-    OTHER("Other", false)
-}
-
-@Entity(tableName = "clients")
-data class ClientEntity(
+@Entity(tableName = "categories")
+data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,
-    val company: String,
-    val segment: String,
-    val email: String,
-    val phone: String,
-    val notes: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val colorHex: Long,
+    val sectorNote: String = ""
 )
 
 @Entity(
-    tableName = "projects",
+    tableName = "products",
     foreignKeys = [
         ForeignKey(
-            entity = ClientEntity::class,
+            entity = CategoryEntity::class,
             parentColumns = ["id"],
-            childColumns = ["clientId"],
+            childColumns = ["categoryId"],
             onDelete = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index("clientId")]
+    indices = [Index("categoryId"), Index("uniqueCode")]
 )
-data class ProjectEntity(
+data class ProductEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
-    val code: String,
-    val title: String,
-    val clientId: Long? = null,
-    val description: String = "",
-    val status: ProjectStatus = ProjectStatus.PLANNED,
-    val budget: Double = 0.0,
-    val progressPercent: Int = 0,
-    val dueDateMillis: Long = System.currentTimeMillis() + 14L * 86_400_000L,
-    val createdAt: Long = System.currentTimeMillis()
-)
+    val uniqueCode: String = "",
+    val code: String = "",
+    val name: String,
+    val categoryId: Long? = null,
+    val unit: String = "un",
+    val quantity: Double = 0.0,
+    val minStock: Double = 1.0,
+    val unitPrice: Double = 0.0,
+    val lastPaidPrice: Double? = null,
+    val expiryDateMillis: Long? = null,
+    val notes: String = "",
+    val updatedAt: Long = System.currentTimeMillis()
+) {
+    val isLowStock: Boolean
+        get() = quantity <= minStock
+
+    val estimatedTotalValue: Double
+        get() = quantity * unitPrice
+}
 
 @Entity(
-    tableName = "tasks",
+    tableName = "product_aliases",
     foreignKeys = [
         ForeignKey(
-            entity = ProjectEntity::class,
+            entity = ProductEntity::class,
             parentColumns = ["id"],
-            childColumns = ["projectId"],
+            childColumns = ["productId"],
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("projectId")]
+    indices = [Index("productId"), Index("externalCode")]
 )
-data class TaskEntity(
+data class ProductAliasEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
-    val projectId: Long,
-    val title: String,
-    val isDone: Boolean = false,
-    val priority: TaskPriority = TaskPriority.MEDIUM,
-    val dueDateMillis: Long = System.currentTimeMillis() + 7L * 86_400_000L,
+    val productId: Long,
+    val externalCode: String,
+    val marketName: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 
 @Entity(
-    tableName = "transactions",
+    tableName = "stock_movements",
     foreignKeys = [
         ForeignKey(
-            entity = ProjectEntity::class,
+            entity = ProductEntity::class,
             parentColumns = ["id"],
-            childColumns = ["projectId"],
-            onDelete = ForeignKey.SET_NULL
-        ),
-        ForeignKey(
-            entity = ClientEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["clientId"],
-            onDelete = ForeignKey.SET_NULL
+            childColumns = ["productId"],
+            onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("projectId"), Index("clientId")]
+    indices = [Index("productId")]
 )
-data class TransactionEntity(
+data class StockMovementEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
-    val title: String,
-    val type: TransactionType,
-    val category: TransactionCategory,
-    val amount: Double,
-    val projectId: Long? = null,
-    val clientId: Long? = null,
-    val dateMillis: Long = System.currentTimeMillis(),
+    val productId: Long,
+    val productNameSnapshot: String,
+    val productUnitSnapshot: String,
+    val type: MovementType,
+    val quantityDelta: Double,
+    val previousBalance: Double,
+    val newBalance: Double,
+    val unitPrice: Double,
+    val totalValue: Double,
+    val reason: String = "",
+    val authorName: String = "Thiago Trindade",
+    val timestampMillis: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "market_checkouts")
+data class MarketCheckoutEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val storeName: String,
     val notes: String = "",
+    val totalAmount: Double,
+    val itemCount: Int,
+    val savedToStock: Boolean,
+    val authorName: String,
+    val timestampMillis: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "household_users")
+data class HouseholdUserEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val name: String,
+    val email: String,
+    val passwordHash: String = "",
+    val role: String = "Administrador",
     val createdAt: Long = System.currentTimeMillis()
 )
