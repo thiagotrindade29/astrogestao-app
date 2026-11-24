@@ -44,7 +44,7 @@ import com.example.ui.viewmodel.AstroUiState
 @Composable
 fun FinanceScreen(
     uiState: AstroUiState,
-    onCreateMovement: () -> Unit,
+    onOpenCatalog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val extended = AstroTheme.extended
@@ -147,9 +147,9 @@ fun FinanceScreen(
                 EmptyStateCard(
                     icon = Icons.Rounded.AccountBalanceWallet,
                     title = "Sem histórico financeiro ainda",
-                    body = "Cadastre produtos ou registre entradas de compras para visualizar os gráficos financeiros por mês e por setor.",
-                    primaryActionLabel = stringResource(R.string.action_new_movement),
-                    onPrimaryAction = onCreateMovement,
+                    body = "Cadastre produtos ou finalize uma compra no Modo Mercado para visualizar os gráficos financeiros por mês e por setor.",
+                    primaryActionLabel = stringResource(R.string.action_view_catalog),
+                    onPrimaryAction = onOpenCatalog,
                     testTag = "finance_empty_state"
                 )
             }

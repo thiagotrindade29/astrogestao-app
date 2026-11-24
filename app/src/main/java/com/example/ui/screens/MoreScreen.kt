@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -75,7 +74,6 @@ fun MoreScreen(
     uiState: AstroUiState,
     initialTab: Int = 0,
     onSelectMovementFilter: (MovementType?) -> Unit,
-    onNewMovement: () -> Unit,
     onNewCategory: () -> Unit,
     onEditCategory: (CategoryEntity) -> Unit,
     onDeleteCategory: (CategoryEntity) -> Unit,
@@ -110,32 +108,36 @@ fun MoreScreen(
             )
         }
 
+        val tabs = listOf(
+            Triple(0, R.string.tab_movements, "more_tab_movements"),
+            Triple(1, R.string.tab_categories, "more_tab_categories"),
+            Triple(2, R.string.tab_users, "more_tab_users")
+        )
         TabRow(selectedTabIndex = selectedTab) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text(stringResource(R.string.tab_movements)) },
-                modifier = Modifier.testTag("more_tab_movements")
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = { Text(stringResource(R.string.tab_categories)) },
-                modifier = Modifier.testTag("more_tab_categories")
-            )
-            Tab(
-                selected = selectedTab == 2,
-                onClick = { selectedTab = 2 },
-                text = { Text(stringResource(R.string.tab_users)) },
-                modifier = Modifier.testTag("more_tab_users")
-            )
+            tabs.forEach { (index, labelRes, tag) ->
+                val isSelected = selectedTab == index
+                Tab(
+                    selected = isSelected,
+                    onClick = { selectedTab = index },
+                    modifier = Modifier.testTag(tag)
+                ) {
+                    Text(
+                        text = stringResource(labelRes),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 14.dp)
+                    )
+                }
+            }
         }
 
         when (selectedTab) {
             0 -> MovementsAuditTab(
                 uiState = uiState,
-                onSelectFilter = onSelectMovementFilter,
-                onNewMovement = onNewMovement
+                onSelectFilter = onSelectMovementFilter
             )
             1 -> CategoriesTab(
                 uiState = uiState,
@@ -158,8 +160,7 @@ fun MoreScreen(
 @Composable
 private fun MovementsAuditTab(
     uiState: AstroUiState,
-    onSelectFilter: (MovementType?) -> Unit,
-    onNewMovement: () -> Unit
+    onSelectFilter: (MovementType?) -> Unit
 ) {
     val extended = AstroTheme.extended
     val movements = uiState.filteredMovements
@@ -172,22 +173,17 @@ private fun MovementsAuditTab(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = "Histórico com Auditoria",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Button(
-                    onClick = onNewMovement,
-                    modifier = Modifier.testTag("add_movement_button")
-                ) {
-                    Text(stringResource(R.string.action_new_movement))
-                }
+                Text(
+                    text = "Registro automático de compras, saídas no catálogo e ajustes de estoque.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -220,9 +216,7 @@ private fun MovementsAuditTab(
                 EmptyStateCard(
                     icon = Icons.Rounded.History,
                     title = "Sem movimentações registradas",
-                    body = stringResource(R.string.movements_empty),
-                    primaryActionLabel = stringResource(R.string.action_new_movement),
-                    onPrimaryAction = onNewMovement
+                    body = stringResource(R.string.movements_empty)
                 )
             }
         } else {

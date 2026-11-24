@@ -483,9 +483,7 @@ fun AstroGestaoApp(viewModel: AstroViewModel) {
                             composable(AstroRoutes.ROUTE_FINANCE) {
                                 FinanceScreen(
                                     uiState = uiState,
-                                    onCreateMovement = {
-                                        activeDialog = ActiveDialog.MovementForm(type = MovementType.ENTRADA)
-                                    }
+                                    onOpenCatalog = { navigateTab(AstroRoutes.ROUTE_PRODUCTS) }
                                 )
                             }
 
@@ -494,9 +492,6 @@ fun AstroGestaoApp(viewModel: AstroViewModel) {
                                     uiState = uiState,
                                     initialTab = moreInitialTab,
                                     onSelectMovementFilter = viewModel::selectMovementFilter,
-                                    onNewMovement = {
-                                        activeDialog = ActiveDialog.MovementForm(type = MovementType.ENTRADA)
-                                    },
                                     onNewCategory = { activeDialog = ActiveDialog.CategoryForm() },
                                     onEditCategory = { cat ->
                                         activeDialog = ActiveDialog.CategoryForm(category = cat)

@@ -63,7 +63,6 @@
     <string name="nfce_import_xml">Importar XML</string>
     <string name="nfce_fill_key">Preencher Chave</string>
     <string name="nfce_extract_page">Extrair Itens da Página</string>
-    <string name="nfce_confirm_import">Importar (%1$d) para o Estoque</string>
 
     <string name="section_restock_title">Lista de Compras / Reposição</string>
     <string name="section_restock_subtitle">Produtos com estoque igual ou abaixo do mínimo configurado</string>
@@ -93,9 +92,9 @@
     <string name="market_notes_hint">Ex: Compra quinzenal, itens para o churrasco…</string>
     <string name="market_search_hint">Digite o nome ou código de barras do produto…</string>
     <string name="market_scan_camera">Escanear com Câmera</string>
-    <string name="market_open_camera">Abrir Câmera do Celular</string>
     <string name="market_empty_cart_title">Seu carrinho de compras está vazio</string>
     <string name="market_empty_cart_body">Use a barra de pesquisa ou clique em Escanear com Câmera para bipar produtos na prateleira, ou carregue os itens que estão acabando em casa.</string>
+    <string name="market_load_low_stock_single">Carregar 1 item com estoque baixo</string>
     <string name="market_load_low_stock">Carregar %1$d itens com estoque baixo</string>
     <string name="market_restock_badge">Repor Estoque Baixo (%1$d)</string>
     <string name="market_save_to_stock_toggle">Guardar itens no estoque ao finalizar</string>
@@ -114,7 +113,6 @@
     <string name="tab_movements">Movimentações</string>
     <string name="tab_categories">Categorias</string>
     <string name="tab_users">Usuários</string>
-    <string name="action_new_movement">+ Nova Movimentação</string>
     <string name="action_new_category">+ Nova Categoria</string>
     <string name="action_new_user">+ Novo Usuário</string>
     <string name="action_logout">Sair</string>
