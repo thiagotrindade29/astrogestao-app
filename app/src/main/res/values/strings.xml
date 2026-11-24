@@ -139,6 +139,15 @@
     <string name="confirm_delete_title">Confirmar exclusão</string>
     <string name="confirm_delete_product">Excluir "%1$s" e todo o seu histórico de movimentações?</string>
     <string name="confirm_delete_category">Excluir a categoria "%1$s"? Os produtos vinculados ficarão sem categoria.</string>
+    <string name="confirm_sample_title">Substituir dados pelo catálogo de exemplo?</string>
+    <string name="confirm_sample_body">Você já possui itens ou movimentações salvas. Carregar o catálogo de exemplo apagará os produtos, categorias e históricos atuais.</string>
+    <string name="action_replace">Substituir</string>
+    <string name="section_backup_beta">Backup, Versão e Feedback</string>
+    <string name="action_export_backup">Exportar Backup (.json)</string>
+    <string name="action_restore_backup">Restaurar Backup (.json)</string>
+    <string name="action_share_diagnostics">Enviar Diagnóstico / Feedback</string>
+    <string name="confirm_restore_title">Restaurar backup?</string>
+    <string name="confirm_restore_body">A restauração substituirá as categorias, produtos e movimentações atuais pelos dados do arquivo selecionado.</string>
     <string name="error_required">Campo obrigatório</string>
     <string name="error_invalid_number">Informe um valor numérico válido</string>
 </resources>

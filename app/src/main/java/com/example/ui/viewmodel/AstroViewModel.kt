@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.local.CategoryEntity
 import com.example.data.local.HouseholdUserEntity
 import com.example.data.local.MarketCheckoutEntity
@@ -112,6 +113,7 @@ class AstroViewModel(
                 is AuthOutcome.Success -> prefs.signIn(outcome.user.email, outcome.user.name)
                 AuthOutcome.UserNotFound -> onError("E-mail não cadastrado. Toque em Cadastre-se para criar sua conta.")
                 AuthOutcome.WrongPassword -> onError("Senha incorreta. Tente novamente.")
+                AuthOutcome.NoPasswordConfigured -> onError("Este perfil é apenas de auditoria (sem senha). Crie uma conta própria para entrar.")
             }
         }
     }
@@ -468,10 +470,23 @@ class AstroViewModel(
         }
     }
 
-    fun addUser(name: String, email: String, role: String) {
+    fun addUser(name: String, email: String, role: String, password: String = "") {
         viewModelScope.launch {
-            repository.saveUser(HouseholdUserEntity(name = name, email = email, role = role))
-            _snackbarMessages.tryEmit("Usuário $name adicionado")
+            val cleanPassword = password.trim()
+            val passwordHash = if (cleanPassword.length >= 6) {
+                AstroRepository.hashPassword(cleanPassword)
+            } else {
+                ""
+            }
+            repository.saveUser(
+                HouseholdUserEntity(
+                    name = name.trim(),
+                    email = email.trim().lowercase(),
+                    passwordHash = passwordHash,
+                    role = role
+                )
+            )
+            _snackbarMessages.tryEmit("Usuário ${name.trim()} adicionado")
         }
     }
 
@@ -484,8 +499,65 @@ class AstroViewModel(
 
     fun loadSampleCatalog() {
         viewModelScope.launch {
-            repository.loadSampleCatalog(uiState.value.userName)
+            val author = uiState.value.userName.ifBlank { "Morador" }
+            repository.loadSampleCatalog(author)
             _snackbarMessages.tryEmit("Catálogo de exemplo carregado com códigos únicos AST")
+        }
+    }
+
+    fun exportBackupToUri(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val json = repository.exportBackupJson()
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(json.toByteArray(Charsets.UTF_8))
+                    } ?: error("Não foi possível abrir o destino selecionado.")
+                }
+            }
+            result.fold(
+                onSuccess = { _snackbarMessages.tryEmit("Backup exportado com sucesso!") },
+                onFailure = { err ->
+                    _snackbarMessages.tryEmit("Erro ao exportar backup: ${err.localizedMessage ?: "falha"}")
+                }
+            )
+        }
+    }
+
+    fun importBackupFromUri(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val raw = context.contentResolver.openInputStream(uri)
+                        ?.bufferedReader(Charsets.UTF_8)
+                        ?.use { it.readText() }
+                        ?: error("Não foi possível ler o arquivo selecionado.")
+                    repository.importBackupJson(raw).getOrThrow()
+                }
+            }
+            result.fold(
+                onSuccess = { summary ->
+                    _snackbarMessages.tryEmit(
+                        "Backup restaurado: ${summary.productsRestored} produto(s), ${summary.categoriesRestored} categoria(s)."
+                    )
+                },
+                onFailure = { err ->
+                    _snackbarMessages.tryEmit("Falha ao restaurar backup: ${err.localizedMessage ?: "arquivo inválido"}")
+                }
+            )
+        }
+    }
+
+    fun buildDiagnosticReport(): String {
+        val state = uiState.value
+        return buildString {
+            appendLine("AstroGestão — Relatório de Diagnóstico / Feedback")
+            appendLine("Versão: ${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})")
+            appendLine("Dispositivo: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+            appendLine("Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+            appendLine("Registros locais: ${state.products.size} produtos, ${state.categories.size} categorias, ${state.movements.size} movimentações, ${state.checkouts.size} compras")
+            appendLine()
+            appendLine("Descreva aqui o que aconteceu ou sua sugestão:")
         }
     }
 

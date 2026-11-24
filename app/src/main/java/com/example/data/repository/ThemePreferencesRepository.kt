@@ -29,11 +29,11 @@ class ThemePreferencesRepository(private val context: Context) {
     }
 
     val userEmail: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[Keys.USER_EMAIL] ?: "thiagotrindade628@gmail.com"
+        prefs[Keys.USER_EMAIL] ?: ""
     }
 
     val userName: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[Keys.USER_NAME] ?: "Thiago Trindade"
+        prefs[Keys.USER_NAME] ?: ""
     }
 
     suspend fun setDarkMode(enabled: Boolean) {

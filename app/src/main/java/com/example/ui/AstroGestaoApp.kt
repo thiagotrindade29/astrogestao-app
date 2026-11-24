@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -157,9 +158,20 @@ fun AstroGestaoApp(viewModel: AstroViewModel) {
     val posState by viewModel.posState.collectAsStateWithLifecycle()
 
     AstroGestaoTheme(darkTheme = uiState.isDarkMode) {
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+            return@AstroGestaoTheme
+        }
+
         if (!uiState.isLoggedIn) {
             LoginScreen(
                 defaultEmail = uiState.userEmail,
+                hasRegisteredUsers = uiState.users.isNotEmpty(),
                 onSignIn = viewModel::signInWithPassword,
                 onSignUp = viewModel::signUp
             )
@@ -227,8 +239,8 @@ fun AstroGestaoApp(viewModel: AstroViewModel) {
             }
             ActiveDialog.UserForm -> {
                 UserEditorDialog(
-                    onSave = { name, email, role ->
-                        viewModel.addUser(name, email, role)
+                    onSave = { name, email, role, password ->
+                        viewModel.addUser(name, email, role, password)
                         activeDialog = null
                     },
                     onDismiss = { activeDialog = null }
@@ -500,6 +512,7 @@ fun AstroGestaoApp(viewModel: AstroViewModel) {
                             }
 
                             composable(AstroRoutes.ROUTE_MORE) {
+                                val appContext = androidx.compose.ui.platform.LocalContext.current
                                 MoreScreen(
                                     uiState = uiState,
                                     initialTab = moreInitialTab,
@@ -513,6 +526,9 @@ fun AstroGestaoApp(viewModel: AstroViewModel) {
                                     onDeleteUser = viewModel::deleteUser,
                                     onToggleDarkMode = viewModel::setDarkMode,
                                     onLoadSampleCatalog = viewModel::loadSampleCatalog,
+                                    onExportBackup = { uri -> viewModel.exportBackupToUri(appContext, uri) },
+                                    onRestoreBackup = { uri -> viewModel.importBackupFromUri(appContext, uri) },
+                                    onBuildDiagnosticReport = viewModel::buildDiagnosticReport,
                                     onSignOut = viewModel::signOut
                                 )
                             }

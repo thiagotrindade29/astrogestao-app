@@ -74,8 +74,8 @@ data class NfceImportState(
 data class AstroUiState(
     val isLoading: Boolean = true,
     val isLoggedIn: Boolean = false,
-    val userEmail: String = "thiagotrindade628@gmail.com",
-    val userName: String = "Thiago Trindade",
+    val userEmail: String = "",
+    val userName: String = "",
     val isDarkMode: Boolean = false,
     val categories: List<CategoryEntity> = emptyList(),
     val products: List<ProductEntity> = emptyList(),

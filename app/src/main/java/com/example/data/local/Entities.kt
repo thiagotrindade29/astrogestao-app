@@ -97,7 +97,7 @@ data class StockMovementEntity(
     val unitPrice: Double,
     val totalValue: Double,
     val reason: String = "",
-    val authorName: String = "Thiago Trindade",
+    val authorName: String = "Morador",
     val timestampMillis: Long = System.currentTimeMillis()
 )
 

@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,10 +26,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Backup
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -50,11 +57,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.BuildConfig
 import com.example.R
 import com.example.data.local.CategoryEntity
 import com.example.data.local.HouseholdUserEntity
@@ -68,6 +77,9 @@ import com.example.ui.components.formatQty
 import com.example.ui.theme.AstroTheme
 import com.example.ui.theme.JetBrainsMonoFamily
 import com.example.ui.viewmodel.AstroUiState
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun MoreScreen(
@@ -81,11 +93,16 @@ fun MoreScreen(
     onDeleteUser: (HouseholdUserEntity) -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
     onLoadSampleCatalog: () -> Unit,
+    onExportBackup: (Uri) -> Unit,
+    onRestoreBackup: (Uri) -> Unit,
+    onBuildDiagnosticReport: () -> String,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
     var pendingDeleteCategory by remember { mutableStateOf<CategoryEntity?>(null) }
+    var showSampleOverwriteConfirm by remember { mutableStateOf(false) }
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
 
     pendingDeleteCategory?.let { cat ->
         ConfirmationDialog(
@@ -96,6 +113,32 @@ fun MoreScreen(
                 pendingDeleteCategory = null
             },
             onDismiss = { pendingDeleteCategory = null }
+        )
+    }
+
+    if (showSampleOverwriteConfirm) {
+        ConfirmationDialog(
+            title = stringResource(R.string.confirm_sample_title),
+            message = stringResource(R.string.confirm_sample_body),
+            confirmLabel = stringResource(R.string.action_replace),
+            onConfirm = {
+                showSampleOverwriteConfirm = false
+                onLoadSampleCatalog()
+            },
+            onDismiss = { showSampleOverwriteConfirm = false }
+        )
+    }
+
+    pendingRestoreUri?.let { uri ->
+        ConfirmationDialog(
+            title = stringResource(R.string.confirm_restore_title),
+            message = stringResource(R.string.confirm_restore_body),
+            confirmLabel = stringResource(R.string.action_replace),
+            onConfirm = {
+                pendingRestoreUri = null
+                onRestoreBackup(uri)
+            },
+            onDismiss = { pendingRestoreUri = null }
         )
     }
 
@@ -150,7 +193,16 @@ fun MoreScreen(
                 onNewUser = onNewUser,
                 onDeleteUser = onDeleteUser,
                 onToggleDarkMode = onToggleDarkMode,
-                onLoadSampleCatalog = onLoadSampleCatalog,
+                onRequestSampleCatalog = {
+                    if (uiState.products.isNotEmpty() || uiState.movements.isNotEmpty()) {
+                        showSampleOverwriteConfirm = true
+                    } else {
+                        onLoadSampleCatalog()
+                    }
+                },
+                onExportBackup = onExportBackup,
+                onRequestRestoreBackup = { uri -> pendingRestoreUri = uri },
+                onBuildDiagnosticReport = onBuildDiagnosticReport,
                 onSignOut = onSignOut
             )
         }
@@ -384,10 +436,27 @@ private fun UsersAndSettingsTab(
     onNewUser: () -> Unit,
     onDeleteUser: (HouseholdUserEntity) -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
-    onLoadSampleCatalog: () -> Unit,
+    onRequestSampleCatalog: () -> Unit,
+    onExportBackup: (Uri) -> Unit,
+    onRequestRestoreBackup: (Uri) -> Unit,
+    onBuildDiagnosticReport: () -> String,
     onSignOut: () -> Unit
 ) {
     val extended = AstroTheme.extended
+    val context = LocalContext.current
+
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) onExportBackup(uri)
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) onRequestRestoreBackup(uri)
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp),
@@ -411,15 +480,17 @@ private fun UsersAndSettingsTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = uiState.userName,
+                                text = uiState.userName.ifBlank { "Conta local" },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = uiState.userEmail,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            if (uiState.userEmail.isNotBlank()) {
+                                Text(
+                                    text = uiState.userEmail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         OutlinedButton(
                             onClick = onSignOut,
@@ -450,10 +521,94 @@ private fun UsersAndSettingsTab(
                     }
 
                     OutlinedButton(
-                        onClick = onLoadSampleCatalog,
-                        modifier = Modifier.fillMaxWidth()
+                        onClick = onRequestSampleCatalog,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("load_sample_catalog_button")
                     ) {
                         Text(stringResource(R.string.action_load_sample_catalog))
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, extended.borderSubtle)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.section_backup_beta),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = JetBrainsMonoFamily,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                                exportBackupLauncher.launch("astrogestao_backup_$stamp.json")
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("export_backup_button")
+                        ) {
+                            Icon(Icons.Rounded.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Exportar", maxLines = 1, softWrap = false)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                restoreBackupLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("restore_backup_button")
+                        ) {
+                            Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Restaurar", maxLines = 1, softWrap = false)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val report = onBuildDiagnosticReport()
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Feedback AstroGestão v${BuildConfig.VERSION_NAME}")
+                                putExtra(Intent.EXTRA_TEXT, report)
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Enviar feedback"))
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("share_diagnostics_button")
+                    ) {
+                        Icon(Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(stringResource(R.string.action_share_diagnostics))
                     }
                 }
             }

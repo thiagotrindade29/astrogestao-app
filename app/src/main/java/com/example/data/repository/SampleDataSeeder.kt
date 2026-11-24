@@ -31,16 +31,6 @@ internal class SampleDataSeeder(private val db: AppDatabase) {
                 )
                 defaults.forEach { categoryDao.insert(it) }
             }
-            if (userDao.count() == 0) {
-                userDao.insert(
-                    HouseholdUserEntity(
-                        name = "Thiago Trindade",
-                        email = "thiagotrindade628@gmail.com",
-                        passwordHash = "",
-                        role = "Administrador"
-                    )
-                )
-            }
             val currentProducts = productDao.getAllOnce()
             var nextSeq = ProductMatcher.nextUniqueSequence(currentProducts)
             currentProducts.filter { it.uniqueCode.isBlank() }.forEach { prod ->

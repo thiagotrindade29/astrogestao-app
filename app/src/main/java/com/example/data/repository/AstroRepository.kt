@@ -12,6 +12,9 @@ import com.example.data.local.StockMovementEntity
 import com.example.data.nfce.ParsedNfceItem
 import kotlinx.coroutines.flow.Flow
 import java.security.MessageDigest
+import java.security.SecureRandom
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 import kotlin.math.abs
 
 data class PosCheckoutEntry(
@@ -28,6 +31,7 @@ sealed interface AuthOutcome {
     data class Success(val user: HouseholdUserEntity) : AuthOutcome
     data object UserNotFound : AuthOutcome
     data object WrongPassword : AuthOutcome
+    data object NoPasswordConfigured : AuthOutcome
 }
 
 data class CanonicalResolution(
@@ -53,6 +57,54 @@ class AstroRepository(private val db: AppDatabase) {
     val users: Flow<List<HouseholdUserEntity>> = userDao.observeAll()
 
     companion object {
+        private const val PBKDF2_PREFIX = "pbkdf2$"
+        private const val PBKDF2_ITERATIONS = 10_000
+        private const val PBKDF2_KEY_BITS = 256
+        private val secureRandom = SecureRandom()
+
+        fun hashPassword(raw: String): String {
+            val salt = ByteArray(16)
+            secureRandom.nextBytes(salt)
+            val hash = pbkdf2(raw, salt)
+            return "$PBKDF2_PREFIX${salt.toHex()}$${hash.toHex()}"
+        }
+
+        fun verifyPassword(raw: String, storedHash: String): Boolean {
+            if (storedHash.isBlank()) return false
+            if (storedHash.startsWith(PBKDF2_PREFIX)) {
+                val parts = storedHash.removePrefix(PBKDF2_PREFIX).split("$")
+                if (parts.size != 2) return false
+                val salt = parts[0].hexToBytesOrNull() ?: return false
+                val expected = parts[1].hexToBytesOrNull() ?: return false
+                val actual = pbkdf2(raw, salt)
+                return MessageDigest.isEqual(actual, expected)
+            }
+            return MessageDigest.isEqual(
+                sha256Hex(raw).toByteArray(Charsets.UTF_8),
+                storedHash.toByteArray(Charsets.UTF_8)
+            )
+        }
+
+        private fun pbkdf2(password: String, salt: ByteArray): ByteArray {
+            val spec = PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, PBKDF2_KEY_BITS)
+            return try {
+                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+            } finally {
+                spec.clearPassword()
+            }
+        }
+
+        private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+        private fun String.hexToBytesOrNull(): ByteArray? {
+            if (length % 2 != 0) return null
+            return runCatching {
+                ByteArray(length / 2) { idx ->
+                    substring(idx * 2, idx * 2 + 2).toInt(16).toByte()
+                }
+            }.getOrNull()
+        }
+
         fun sha256Hex(raw: String): String {
             val bytes = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
             return bytes.joinToString("") { "%02x".format(it) }
@@ -62,6 +114,11 @@ class AstroRepository(private val db: AppDatabase) {
     suspend fun ensureDefaultsSeeded() = seeder.ensureDefaultsSeeded()
 
     suspend fun loadSampleCatalog(authorName: String) = seeder.loadSampleCatalog(authorName)
+
+    suspend fun exportBackupJson(): String = BackupManager.exportJson(db)
+
+    suspend fun importBackupJson(rawJson: String): Result<BackupRestoreSummary> =
+        BackupManager.importJson(db, rawJson)
 
     suspend fun registerUser(
         name: String,
@@ -79,7 +136,7 @@ class AstroRepository(private val db: AppDatabase) {
                 val user = HouseholdUserEntity(
                     name = cleanName,
                     email = cleanEmail,
-                    passwordHash = sha256Hex(password),
+                    passwordHash = hashPassword(password),
                     role = role
                 )
                 val newId = userDao.insert(user)
@@ -92,9 +149,9 @@ class AstroRepository(private val db: AppDatabase) {
         val cleanEmail = email.trim().lowercase()
         val user = userDao.getByEmail(cleanEmail) ?: return AuthOutcome.UserNotFound
         if (user.passwordHash.isBlank()) {
-            return if (password.length >= 4) AuthOutcome.Success(user) else AuthOutcome.WrongPassword
+            return AuthOutcome.NoPasswordConfigured
         }
-        return if (user.passwordHash == sha256Hex(password)) {
+        return if (verifyPassword(password, user.passwordHash)) {
             AuthOutcome.Success(user)
         } else {
             AuthOutcome.WrongPassword

@@ -152,13 +152,14 @@ fun CategoryEditorDialog(
 
 @Composable
 fun UserEditorDialog(
-    onSave: (name: String, email: String, role: String) -> Unit,
+    onSave: (name: String, email: String, role: String, password: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("Morador") }
-    var hasError by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -169,7 +170,7 @@ fun UserEditorDialog(
                     value = name,
                     onValueChange = {
                         name = it
-                        hasError = false
+                        errorText = null
                     },
                     label = { Text(stringResource(R.string.label_name)) },
                     singleLine = true,
@@ -179,10 +180,23 @@ fun UserEditorDialog(
                     value = email,
                     onValueChange = {
                         email = it
-                        hasError = false
+                        errorText = null
                     },
                     label = { Text(stringResource(R.string.label_email)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        errorText = null
+                    },
+                    label = { Text("Senha de acesso (opcional)") },
+                    supportingText = {
+                        Text("Opcional (mín. 6 caracteres) se este usuário for entrar no app.")
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -195,9 +209,9 @@ fun UserEditorDialog(
                         )
                     }
                 }
-                if (hasError) {
+                errorText?.let { msg ->
                     Text(
-                        text = "Informe nome e e-mail válidos.",
+                        text = msg,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -207,11 +221,16 @@ fun UserEditorDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (name.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-                        hasError = true
-                        return@Button
+                    val trimmedPassword = password.trim()
+                    when {
+                        name.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> {
+                            errorText = "Informe nome e e-mail válidos."
+                        }
+                        trimmedPassword.isNotEmpty() && trimmedPassword.length < 6 -> {
+                            errorText = "A senha deve ter ao menos 6 caracteres (ou deixe em branco)."
+                        }
+                        else -> onSave(name.trim(), email.trim(), role, trimmedPassword)
                     }
-                    onSave(name.trim(), email.trim(), role)
                 }
             ) {
                 Text(stringResource(R.string.action_save))

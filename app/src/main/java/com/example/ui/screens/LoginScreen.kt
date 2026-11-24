@@ -65,15 +65,16 @@ import com.example.ui.components.AstroBrandLogo
 @Composable
 fun LoginScreen(
     defaultEmail: String,
+    hasRegisteredUsers: Boolean,
     onSignIn: (email: String, password: String, onError: (String) -> Unit) -> Unit,
     onSignUp: (name: String, email: String, password: String, role: String, onError: (String) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isSignUpMode by remember { mutableStateOf(false) }
+    var isSignUpMode by remember(hasRegisteredUsers) { mutableStateOf(!hasRegisteredUsers) }
 
     // Shared / Login state
-    var email by remember { mutableStateOf(defaultEmail) }
-    var password by remember { mutableStateOf("••••••••") }
+    var email by remember(defaultEmail) { mutableStateOf(defaultEmail) }
+    var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
 
     // Sign-Up state
@@ -81,7 +82,9 @@ fun LoginScreen(
     var signUpEmail by remember { mutableStateOf("") }
     var signUpPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var selectedRole by remember { mutableStateOf("Morador") }
+    var selectedRole by remember(hasRegisteredUsers) {
+        mutableStateOf(if (hasRegisteredUsers) "Morador" else "Administrador")
+    }
     var showSignUpPassword by remember { mutableStateOf(false) }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }

@@ -12,6 +12,9 @@ interface CategoryDao {
     @Query("SELECT * FROM categories ORDER BY name ASC")
     fun observeAll(): Flow<List<CategoryEntity>>
 
+    @Query("SELECT * FROM categories ORDER BY id ASC")
+    suspend fun getAllOnce(): List<CategoryEntity>
+
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
 
@@ -75,6 +78,9 @@ interface StockMovementDao {
     @Query("SELECT * FROM stock_movements ORDER BY timestampMillis DESC, id DESC")
     fun observeAll(): Flow<List<StockMovementEntity>>
 
+    @Query("SELECT * FROM stock_movements ORDER BY timestampMillis ASC, id ASC")
+    suspend fun getAllOnce(): List<StockMovementEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(movement: StockMovementEntity): Long
 
@@ -86,6 +92,9 @@ interface StockMovementDao {
 interface MarketCheckoutDao {
     @Query("SELECT * FROM market_checkouts ORDER BY timestampMillis DESC, id DESC")
     fun observeAll(): Flow<List<MarketCheckoutEntity>>
+
+    @Query("SELECT * FROM market_checkouts ORDER BY timestampMillis ASC, id ASC")
+    suspend fun getAllOnce(): List<MarketCheckoutEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(checkout: MarketCheckoutEntity): Long
