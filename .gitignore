@@ -12,3 +12,4 @@ debug.keystore
 captures/
 .externalNativeBuild/
 .cxx/
+*-debug.log

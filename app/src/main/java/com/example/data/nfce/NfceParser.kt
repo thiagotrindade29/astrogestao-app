@@ -354,8 +354,11 @@ object NfceParser {
     }
 
     fun parseOcrReceiptText(rawText: String): NfceParseResult {
+        val decimalSpaceFixRegex = Regex("(\\d)\\s*,\\s*(\\d{2,4})")
         val lines = rawText.lines()
-            .map { it.trim().replace(Regex("\\s+"), " ") }
+            .map { raw ->
+                decimalSpaceFixRegex.replace(raw.trim().replace(Regex("\\s+"), " "), "$1,$2")
+            }
             .filter { it.isNotBlank() }
 
         val accessKey = SefazPortals.extractAccessKey(rawText)
@@ -364,11 +367,12 @@ object NfceParser {
         val storeKeywords = listOf(
             "supermercado", "mercado", "atacad", "comercial", "padaria", "farmacia",
             "drogaria", "hiper", "ltda", "s/a", "angeloni", "bistek", "giassi",
-            "fort", "carrefour", "assaí", "assai", "koch", "muffato", "condor"
+            "fort", "carrefour", "assaí", "assai", "koch", "muffato", "condor", "imperatriz", "cooper"
         )
-        val storeName = lines.take(8).firstOrNull { line ->
+        val storeName = lines.take(10).firstOrNull { line ->
             val low = line.lowercase()
             line.length >= 4 && !low.contains("cnpj") && !low.contains("danfe") &&
+                !low.contains("documento auxiliar") &&
                 (storeKeywords.any { low.contains(it) } || line.count { it.isLetter() } >= 6)
         }
 
@@ -377,7 +381,8 @@ object NfceParser {
             "subtotal", "valor total", "total a pagar", "valor pago", "troco", "desconto",
             "acrescimo", "cartao", "crédito", "credito", "débito", "debito", "pix", "dinheiro",
             "forma pagamento", "tributos", "lei 12.741", "consulte pela chave", "chave de acesso",
-            "protocolo", "procon", "serie", "extrato", "qtd. total", "itens"
+            "protocolo", "procon", "serie", "extrato", "qtd. total", "qtde. total", "vl. total",
+            "codigo descricao", "código descrição", "item codigo"
         )
 
         fun isNoiseLine(line: String): Boolean {
@@ -386,101 +391,197 @@ object NfceParser {
                 low.startsWith("http") ||
                 low.matches(Regex("^\\d{2}/\\d{2}/\\d{2,4}.*")) ||
                 low.matches(Regex("^cep[:\\s].*")) ||
-                low.matches(Regex("^rua\\s.*|^av\\.?\\s.*"))
+                low.matches(Regex("^rua\\s.*|^av\\.?\\s.*")) ||
+                low.matches(Regex("^[-=_*]{3,}$"))
         }
 
-        val items = mutableListOf<ParsedNfceItem>()
-        val qtyLineRegex = Regex(
-            "^([0-9]+[.,]?[0-9]*)\\s*(un|und|kg|g|gr|l|lt|ml|pct|cx|pc)?\\s*[xX*]\\s*(?:R\\$)?\\s*([0-9]+,[0-9]{2})",
+        val unitPattern = "(un|und|unid|um|kg|g|gr|l|lt|ml|pct|cx|pc|pç|gf|fd|rl|bd|dz)"
+        val sefazDetailsLineRegex = Regex(
+            "Qtde\\.?\\s*:?\\s*([0-9]+[.,]?[0-9]*)\\s+(?:UN\\.?\\s*:?\\s*([A-Za-zÀ-ÿ]+)\\s+)?(?:Vl\\.?\\s*Unit\\.?\\s*:?\\s*(?:R\\$)?\\s*([0-9.,]+))?",
             RegexOption.IGNORE_CASE
         )
+        val qtyTimesPriceRegex = Regex(
+            "^([0-9]+[.,]?[0-9]*)\\s*$unitPattern?\\s*[xX*]\\s*(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s*=.*|\\s+[0-9]+,[0-9]{2}.*)?$",
+            RegexOption.IGNORE_CASE
+        )
+        val sefazCodeSuffixRegex = Regex("\\(C[oó]digo:\\s*([^)]+)\\)", RegexOption.IGNORE_CASE)
         val priceTokenRegex = Regex("(?:R\\$\\s*)?([0-9]{1,4}(?:\\.[0-9]{3})*,[0-9]{2})")
-        val inlineItemRegex = Regex(
-            "^(?:\\d{1,4}\\s+)?(?:(\\d{6,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s*(un|und|kg|g|gr|l|lt|ml|pct|cx|pc)\\s+(?:[xX*]\\s*)?(?:R\\$)?\\s*([0-9]+,[0-9]{2})",
+        val inlineItemWithOperatorRegex = Regex(
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s*$unitPattern\\s+[xX*]\\s*(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s+(?:R\\$)?\\s*[0-9]+,[0-9]{2})?(?:\\s+[A-Z0-9%]{1,5})?$",
+            RegexOption.IGNORE_CASE
+        )
+        val inlineItemTwoPricesRegex = Regex(
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s+$unitPattern\\s+(?:R\\$)?\\s*([0-9]+,[0-9]{2})\\s+(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$",
+            RegexOption.IGNORE_CASE
+        )
+        val descQtyTotalRegex = Regex(
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s+$unitPattern\\s+(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$",
             RegexOption.IGNORE_CASE
         )
         val descPlusPriceRegex = Regex(
-            "^(?:\\d{1,4}\\s+)?(?:(\\d{6,14})\\s+)?(.+?)\\s+(?:R\\$\\s*)?([0-9]+,[0-9]{2})(?:\\s+[A-Z0-9])?$"
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+(?:R\\$\\s*)?([0-9]+,[0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$"
         )
 
-        var pendingProductLine: Pair<String, String>? = null
+        val items = mutableListOf<ParsedNfceItem>()
+        var pendingCode = ""
+        var pendingName = ""
+
+        fun cleanCandidateName(raw: String): Pair<String, String> {
+            val suffixCode = sefazCodeSuffixRegex.find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+            val clean = sefazCodeSuffixRegex.replace(raw, "")
+                .replace(Regex("^\\d{1,3}\\s*[-.)]\\s*"), "")
+                .trim()
+            return suffixCode to clean
+        }
+
+        fun clearPending() {
+            pendingCode = ""
+            pendingName = ""
+        }
+
+        val startsWithItemIndexRegex = Regex("^\\d{1,4}\\s+")
 
         for (line in lines) {
-            if (isNoiseLine(line)) {
-                pendingProductLine = null
+            if (isNoiseLine(line) || line == storeName) {
+                clearPending()
                 continue
             }
 
-            val qMatch = qtyLineRegex.find(line)
-            if (qMatch != null && pendingProductLine != null) {
-                val qty = parseDecimal(qMatch.groupValues[1]) ?: 1.0
-                val unit = normalizeUnit(qMatch.groupValues[2].ifBlank { "un" })
-                val unitPrice = parseDecimal(qMatch.groupValues[3]) ?: 0.0
+            // Formato print/site da SEFAZ: "Qtde.: 2 UN: UN Vl. Unit.: 9,99"
+            val sefazLine = sefazDetailsLineRegex.find(line)
+            if (sefazLine != null && pendingName.isNotBlank()) {
+                val qty = parseDecimal(sefazLine.groupValues[1]) ?: 1.0
+                val unit = normalizeUnit(sefazLine.groupValues[2].ifBlank { "un" })
+                val unitPrice = parseDecimal(sefazLine.groupValues[3]) ?: 0.0
                 items.add(
                     ParsedNfceItem(
-                        code = pendingProductLine.first,
-                        name = pendingProductLine.second,
+                        code = pendingCode,
+                        name = pendingName,
                         unit = unit,
                         quantity = qty.coerceAtLeast(0.01),
                         unitPrice = unitPrice.coerceAtLeast(0.0)
                     )
                 )
-                pendingProductLine = null
+                clearPending()
                 continue
             }
 
-            val inlineMatch = inlineItemRegex.find(line)
+            // Linha de detalhe de cupom térmico: "2,000 UN X 4,89   9,78"
+            val qMatch = qtyTimesPriceRegex.find(line)
+            if (qMatch != null && pendingName.isNotBlank()) {
+                val qty = parseDecimal(qMatch.groupValues[1]) ?: 1.0
+                val unit = normalizeUnit(qMatch.groupValues[2].ifBlank { "un" })
+                val unitPrice = parseDecimal(qMatch.groupValues[3]) ?: 0.0
+                items.add(
+                    ParsedNfceItem(
+                        code = pendingCode,
+                        name = pendingName,
+                        unit = unit,
+                        quantity = qty.coerceAtLeast(0.01),
+                        unitPrice = unitPrice.coerceAtLeast(0.0)
+                    )
+                )
+                clearPending()
+                continue
+            }
+
+            val startsWithItemIndex = startsWithItemIndexRegex.containsMatchIn(line)
+
+            // Linha única completa: "001 789... LEITE INTEGRAL 2 UN x 4,89 9,78" ou "... 2 UN 4,89 9,78" ou "... 2 UN 9,78"
+            val unitPriceMatch = inlineItemWithOperatorRegex.find(line) ?: inlineItemTwoPricesRegex.find(line)
+            val totalOnlyMatch = if (unitPriceMatch == null) descQtyTotalRegex.find(line) else null
+            val inlineMatch = unitPriceMatch ?: totalOnlyMatch
             if (inlineMatch != null) {
-                val code = inlineMatch.groupValues[1].trim()
-                val name = inlineMatch.groupValues[2].trim()
+                val rawCode = inlineMatch.groupValues[1].trim()
+                val (suffixCode, cleanName) = cleanCandidateName(inlineMatch.groupValues[2])
                 val qty = parseDecimal(inlineMatch.groupValues[3]) ?: 1.0
                 val unit = normalizeUnit(inlineMatch.groupValues[4])
-                val unitPrice = parseDecimal(inlineMatch.groupValues[5]) ?: 0.0
-                if (name.length >= 2 && name.any { it.isLetter() }) {
+                val rawPrice = parseDecimal(inlineMatch.groupValues[5]) ?: 0.0
+                val unitPrice = if (unitPriceMatch != null) {
+                    rawPrice
+                } else if (qty > 0.0) {
+                    (rawPrice / qty).coerceAtLeast(0.0)
+                } else rawPrice
+
+                val isContinuation = pendingName.isNotBlank() && !startsWithItemIndex && rawCode.isBlank() && suffixCode.isBlank()
+                val finalName = if (isContinuation) "$pendingName $cleanName".trim() else cleanName
+                val finalCode = if (isContinuation) pendingCode else rawCode.ifBlank { suffixCode }
+
+                if (finalName.length >= 2 && finalName.any { it.isLetter() }) {
                     items.add(
                         ParsedNfceItem(
-                            code = code,
-                            name = name,
+                            code = finalCode,
+                            name = finalName,
                             unit = unit,
                             quantity = qty.coerceAtLeast(0.01),
                             unitPrice = unitPrice.coerceAtLeast(0.0)
                         )
                     )
-                    pendingProductLine = null
+                    clearPending()
                     continue
                 }
             }
 
+            // Linha única nome + preço: "001 789... CAFE MELITTA 500G   18,90 F1" ou continuação de descrição + preço
             val descPriceMatch = descPlusPriceRegex.find(line)
             if (descPriceMatch != null) {
-                val code = descPriceMatch.groupValues[1].trim()
-                val name = descPriceMatch.groupValues[2].trim()
+                val rawCode = descPriceMatch.groupValues[1].trim()
+                val (suffixCode, cleanName) = cleanCandidateName(descPriceMatch.groupValues[2])
                 val price = parseDecimal(descPriceMatch.groupValues[3]) ?: 0.0
-                if (name.length >= 3 && name.any { it.isLetter() } && price > 0.0 && price < 50000.0) {
+
+                val isContinuation = pendingName.isNotBlank() && !startsWithItemIndex && rawCode.isBlank() && suffixCode.isBlank()
+                val finalName = if (isContinuation) "$pendingName $cleanName".trim() else cleanName
+                val finalCode = if (isContinuation) pendingCode else rawCode.ifBlank { suffixCode }
+
+                if (finalName.length >= 3 && finalName.any { it.isLetter() } && price > 0.0 && price < 50000.0) {
                     items.add(
                         ParsedNfceItem(
-                            code = code,
-                            name = name,
+                            code = finalCode,
+                            name = finalName,
                             unit = "un",
                             quantity = 1.0,
                             unitPrice = price
                         )
                     )
-                    pendingProductLine = null
+                    clearPending()
                     continue
                 }
             }
 
-            val headerCodeAndName = Regex("^(?:\\d{1,4}\\s+)?(?:(\\d{6,14})\\s+)?([A-Za-zÀ-ÿ].{2,})$").find(line)
-            if (headerCodeAndName != null && priceTokenRegex.find(line) == null) {
-                val code = headerCodeAndName.groupValues[1].trim()
-                val name = headerCodeAndName.groupValues[2].trim()
-                if (name.count { it.isLetter() } >= 3) {
-                    pendingProductLine = code to name
+            // Preço isolado na linha logo abaixo de uma descrição pendente
+            if (pendingName.isNotBlank() && line.matches(Regex("^(?:R\\$\\s*)?[0-9.,]+$"))) {
+                val lonePrice = parseDecimal(line)
+                if (lonePrice != null && lonePrice > 0.0 && lonePrice < 50000.0) {
+                    items.add(
+                        ParsedNfceItem(
+                            code = pendingCode,
+                            name = pendingName,
+                            unit = "un",
+                            quantity = 1.0,
+                            unitPrice = lonePrice
+                        )
+                    )
+                    clearPending()
+                    continue
                 }
-            } else {
-                pendingProductLine = null
             }
+
+            // Cabeçalho de produto (1ª linha do item, ou descrição continuada em 2 linhas)
+            val headerCodeAndName = Regex("^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.{3,})$").find(line)
+            if (headerCodeAndName != null && priceTokenRegex.find(line) == null) {
+                val rawCode = headerCodeAndName.groupValues[1].trim()
+                val (suffixCode, cleanName) = cleanCandidateName(headerCodeAndName.groupValues[2])
+                if (cleanName.count { it.isLetter() } >= 3) {
+                    if (pendingName.isNotBlank() && !startsWithItemIndex && rawCode.isBlank() && suffixCode.isBlank()) {
+                        pendingName = "$pendingName $cleanName".trim()
+                    } else {
+                        pendingCode = rawCode.ifBlank { suffixCode }
+                        pendingName = cleanName
+                    }
+                    continue
+                }
+            }
+            clearPending()
         }
 
         return NfceParseResult(
@@ -508,7 +609,7 @@ object NfceParser {
                 if (name.length < 2 || name.all { it.isDigit() }) continue
                 val numbers = parts.drop(1).mapNotNull { parseDecimal(it.replace(Regex("[^0-9.,]"), "")) }
                 val unitFound = parts.drop(1).firstOrNull {
-                    it.lowercase() in setOf("un", "kg", "g", "l", "ml", "pct", "cx", "pc", "lt")
+                    it.lowercase() in setOf("un", "kg", "g", "l", "ml", "pct", "cx", "pc", "lt", "und", "unid")
                 }
                 val qty = numbers.getOrNull(0) ?: 1.0
                 val price = numbers.lastOrNull() ?: 0.0

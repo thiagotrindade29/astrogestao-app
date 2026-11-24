@@ -4,28 +4,15 @@
     <string name="brand_subtitle">Estoque e finanças</string>
 
     <!-- Login -->
-    <string name="login_eyebrow">SEU ESPAÇO, SOB CONTROLE</string>
-    <string name="login_headline">Organize seu estoque.\nTenha clareza para decidir.</string>
-    <string name="login_subheadline">Produtos, movimentações e gastos reunidos em um só lugar.</string>
-    <string name="login_welcome_tag">BEM-VINDO DE VOLTA</string>
-    <string name="login_title">Entre na sua conta</string>
-    <string name="login_subtitle">Acesse seu inventário usando seu e-mail e senha.</string>
+    <string name="login_eyebrow">NUVEM &amp; FAMÍLIA SINCRONIZADOS</string>
+    <string name="login_headline">Seu estoque em qualquer celular.\nCompartilhado com sua família.</string>
+    <string name="login_subheadline">Salve produtos, cupons e gastos com segurança na nuvem usando sua conta Google.</string>
+    <string name="login_welcome_tag">ACESSO SEGURO NA NUVEM</string>
+    <string name="login_title">Entre com sua conta Google</string>
+    <string name="login_subtitle">Cada conta cria seu espaço isolado automaticamente. Depois, compartilhe o código com sua família se quiser gerenciar juntos.</string>
+    <string name="action_sign_in_google">Entrar com Google</string>
     <string name="label_email">E-mail</string>
-    <string name="label_password">Senha</string>
-    <string name="action_sign_in">Entrar</string>
-    <string name="login_footer_note">Acesso privado ao inventário desta instalação.</string>
-    <string name="error_invalid_credentials">Informe um e-mail válido e senha (mínimo 4 caracteres).</string>
-    <string name="signup_tag">CRIAR CONTA</string>
-    <string name="signup_title">Cadastre-se no AstroGestão</string>
-    <string name="signup_subtitle">Crie seu perfil para controlar o estoque e os gastos da casa.</string>
-    <string name="label_full_name">Nome completo</string>
-    <string name="label_confirm_password">Confirmar senha</string>
-    <string name="action_create_account">Criar conta e entrar</string>
-    <string name="action_go_to_signup">Não tem conta? Cadastre-se</string>
-    <string name="action_back_to_login">Já possui conta? Entrar</string>
-    <string name="error_password_mismatch">As senhas não conferem.</string>
-    <string name="error_password_short">A senha deve ter ao menos 6 caracteres.</string>
-    <string name="error_email_exists">Já existe um usuário cadastrado com este e-mail.</string>
+    <string name="login_footer_note">Seus dados acompanham você ao trocar de celular ou entrar em outro aparelho.</string>
 
     <!-- Navegação -->
     <string name="nav_home">Início</string>

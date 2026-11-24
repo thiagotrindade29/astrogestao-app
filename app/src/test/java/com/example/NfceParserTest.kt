@@ -26,6 +26,10 @@ class NfceParserTest {
             "SC",
             SefazPortals.detectForInput("https://sat.sef.sc.gov.br/tax.NET/Sat.NFe.Web/Consultas/ConsultaPublicaNFe.aspx?amb=PROD").ufSigla
         )
+        assertEquals(
+            "SC",
+            SefazPortals.detectForInput("https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/NFCe_Detalhes.aspx?rq=t8BOzGQx").ufSigla
+        )
         assertTrue(SefazPortals.allPortals.size >= 27)
     }
 
@@ -87,5 +91,54 @@ class NfceParserTest {
         assertEquals("ARROZ TIPO 1 5KG", result.items[0].name)
         assertEquals(2.0, result.items[0].quantity, 0.001)
         assertEquals(27.90, result.items[0].unitPrice, 0.001)
+    }
+
+    @Test
+    fun `parseOcrReceiptText extracts items from SEFAZ print format`() {
+        val sefazPrint = """
+            BISTEK SUPERMERCADOS LTDA
+            LEITE INTEGRAL TIROL 1L (Código: 7896256600123)
+            Qtde.: 6 UN: UN Vl. Unit.: 4, 89
+            ACUCAR REFINADO UNIAO 1KG (Código: 7891910000197)
+            Qtde.: 2 UN: UN Vl. Unit.: 5,50
+        """.trimIndent()
+
+        val result = NfceParser.parseOcrReceiptText(sefazPrint)
+        assertEquals(2, result.items.size)
+        assertEquals("LEITE INTEGRAL TIROL 1L", result.items[0].name)
+        assertEquals("7896256600123", result.items[0].code)
+        assertEquals(6.0, result.items[0].quantity, 0.001)
+        assertEquals(4.89, result.items[0].unitPrice, 0.001)
+        assertEquals("ACUCAR REFINADO UNIAO 1KG", result.items[1].name)
+        assertEquals(2.0, result.items[1].quantity, 0.001)
+        assertEquals(5.50, result.items[1].unitPrice, 0.001)
+    }
+
+    @Test
+    fun `parseOcrReceiptText extracts multiline thermal receipt with spaced decimals and tax flags`() {
+        val ocrText = """
+            ANGELONI SUPERMERCADOS LTDA
+            CNPJ: 83.646.984/0001-01
+            001 7891000100103 LEITE INTEGRAL 1L
+            6,000 UN x 4, 89   29,34
+            002 7891910000197 CAFE SOLUVEL
+            TRADICIONAL 200G   18,90 F1
+            003 FEIJAO PRETO 1KG   2 UN   15,00 T18%
+        """.trimIndent()
+
+        val result = NfceParser.parseOcrReceiptText(ocrText)
+        assertEquals(3, result.items.size)
+
+        assertEquals("LEITE INTEGRAL 1L", result.items[0].name)
+        assertEquals(6.0, result.items[0].quantity, 0.001)
+        assertEquals(4.89, result.items[0].unitPrice, 0.001)
+
+        assertEquals("CAFE SOLUVEL TRADICIONAL 200G", result.items[1].name)
+        assertEquals(1.0, result.items[1].quantity, 0.001)
+        assertEquals(18.90, result.items[1].unitPrice, 0.001)
+
+        assertEquals("FEIJAO PRETO 1KG", result.items[2].name)
+        assertEquals(2.0, result.items[2].quantity, 0.001)
+        assertEquals(7.50, result.items[2].unitPrice, 0.001)
     }
 }

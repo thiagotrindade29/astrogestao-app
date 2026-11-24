@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.ContentPaste
@@ -106,6 +107,7 @@ fun NfceImportScreen(
     onProcessReceiptImage: (Uri) -> Unit,
     onConsultInput: () -> Unit,
     onOpenPortal: () -> Unit,
+    onDismissWebPortal: () -> Unit,
     onXmlLoaded: (String) -> Unit,
     onWebViewExtracted: (rawJson: String, isAutoScan: Boolean) -> Unit,
     onToggleItem: (Int) -> Unit,
@@ -183,6 +185,14 @@ fun NfceImportScreen(
                 else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
             },
             onDismiss = { showImageSourceChooser = false }
+        )
+    }
+
+    if (nfceState.showWebPortal) {
+        NfcePortalWebViewDialog(
+            nfceState = nfceState,
+            onWebViewExtracted = onWebViewExtracted,
+            onDismiss = onDismissWebPortal
         )
     }
 
@@ -377,11 +387,38 @@ fun NfceImportScreen(
                                 Text("Escolher Imagem / Tirar Foto")
                             }
                             Text(
-                                text = "Dica: Centralize bem os itens do cupom fiscal ou a área do QR Code para melhor leitura.",
+                                text = "Dica: Para cupons muito longos, aproxime a câmera em blocos ou abra o QR Code direto no Chrome para baixar/copiar todos os itens.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
+                            if (nfceState.inputQuery.startsWith("http", ignoreCase = true)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = onOpenPortal,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("nfce_photo_open_portal_button")
+                                    ) {
+                                        Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Portal (${nfceState.selectedPortal.ufSigla})", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { openUrlInExternalBrowser(context, nfceState.inputQuery.trim()) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("nfce_photo_open_chrome_button")
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Abrir no Chrome", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -519,26 +556,40 @@ fun NfceImportScreen(
                                     }
                                 }
 
-                                OutlinedButton(
-                                    onClick = onOpenPortal,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("nfce_open_portal_button")
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Abrir Portal SEFAZ (${nfceState.selectedPortal.ufSigla})")
+                                    OutlinedButton(
+                                        onClick = onOpenPortal,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("nfce_open_portal_button")
+                                    ) {
+                                        Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Portal (${nfceState.selectedPortal.ufSigla})", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            val raw = nfceState.inputQuery.trim()
+                                            val target = if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
+                                                raw
+                                            } else {
+                                                nfceState.selectedPortal.url
+                                            }
+                                            openUrlInExternalBrowser(context, target)
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("nfce_tab_open_chrome_button")
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Abrir no Chrome", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
                                 }
                             }
-                        }
-                    }
-
-                    if (nfceState.showWebPortal) {
-                        item {
-                            NfcePortalWebViewCard(
-                                nfceState = nfceState,
-                                onWebViewExtracted = onWebViewExtracted
-                            )
                         }
                     }
                 }

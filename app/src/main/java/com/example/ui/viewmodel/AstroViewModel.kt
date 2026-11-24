@@ -2,10 +2,12 @@ package com.example.ui.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
+import com.example.data.local.AppDatabase
 import com.example.data.local.CategoryEntity
 import com.example.data.local.HouseholdUserEntity
 import com.example.data.local.MarketCheckoutEntity
@@ -17,12 +19,17 @@ import com.example.data.nfce.NfceParser
 import com.example.data.nfce.ReceiptImageProcessor
 import com.example.data.nfce.RegionalPortal
 import com.example.data.nfce.SefazPortals
-import com.example.data.repository.AstroRepository
-import com.example.data.repository.AuthOutcome
+import com.example.data.remote.FirestoreAstroRepository
+import com.example.data.remote.HouseholdDoc
+import com.example.data.remote.unwrapFirestoreException
 import com.example.data.repository.PosCheckoutEntry
 import com.example.data.repository.ProductMatcher
 import com.example.data.repository.ThemePreferencesRepository
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,7 +37,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,12 +56,40 @@ private data class FilterState(
     val movementFilterType: MovementType? = null
 )
 
+private sealed interface CloudDataState {
+    data object Loading : CloudDataState
+    data class Ready(
+        val household: HouseholdDoc,
+        val members: List<HouseholdUserEntity>,
+        val categories: List<CategoryEntity>,
+        val products: List<ProductEntity>,
+        val aliases: List<ProductAliasEntity>,
+        val movements: List<StockMovementEntity>,
+        val checkouts: List<MarketCheckoutEntity>
+    ) : CloudDataState
+
+    data class Error(val message: String) : CloudDataState
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class AstroViewModel(
-    private val repository: AstroRepository,
-    private val prefs: ThemePreferencesRepository
+    private val repository: FirestoreAstroRepository,
+    private val prefs: ThemePreferencesRepository,
+    private val localDb: AppDatabase,
+    private val currentUserId: String,
+    private val userEmail: String,
+    private val userName: String
 ) : ViewModel() {
 
+    private companion object {
+        const val TAG = "AstroVM"
+        const val STOP_TIMEOUT_MILLIS = 5000L
+    }
+
     private val filterState = MutableStateFlow(FilterState())
+    private val hasLocalMigration = MutableStateFlow(false)
+    private val isSyncingWorkspace = MutableStateFlow(false)
+    private val bootstrapError = MutableStateFlow<String?>(null)
 
     private val _nfceState = MutableStateFlow(NfceImportState())
     val nfceState: StateFlow<NfceImportState> = _nfceState.asStateFlow()
@@ -57,91 +97,266 @@ class AstroViewModel(
     private val _posState = MutableStateFlow(PosMarketState())
     val posState: StateFlow<PosMarketState> = _posState.asStateFlow()
 
-    private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 6)
+    private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
+    private var lastSyncedSignature: String? = null
+
+    private fun <T> Flow<T>.unwrapOrFallback(fallback: T, label: String): Flow<T> = catch { error ->
+        val firestoreError = error.unwrapFirestoreException()
+        if (firestoreError !is FirebaseFirestoreException && error is CancellationException) {
+            throw error
+        }
+        Log.w(TAG, "Erro ao observar $label: ${firestoreError.message}", firestoreError)
+        emit(fallback)
+    }
+
+    private val cloudDataState: StateFlow<CloudDataState> = repository.observeUserProfile(currentUserId)
+        .map { it?.activeHouseholdId.orEmpty() }
+        .distinctUntilChanged()
+        .flatMapLatest { householdId ->
+            if (householdId.isBlank()) {
+                flowOf<CloudDataState>(CloudDataState.Loading)
+            } else {
+                combine(
+                    repository.observeHousehold(householdId, currentUserId),
+                    repository.observeMembers(householdId, currentUserId).unwrapOrFallback(emptyList(), "members"),
+                    repository.observeCategories(householdId, currentUserId).unwrapOrFallback(emptyList(), "categories"),
+                    repository.observeProducts(householdId, currentUserId).unwrapOrFallback(emptyList(), "products"),
+                    repository.observeAliases(householdId, currentUserId).unwrapOrFallback(emptyList(), "aliases"),
+                    repository.observeMovements(householdId, currentUserId).unwrapOrFallback(emptyList(), "movements"),
+                    repository.observeCheckouts(householdId, currentUserId).unwrapOrFallback(emptyList(), "checkouts")
+                ) { values ->
+                    val household = values[0] as HouseholdDoc?
+                    @Suppress("UNCHECKED_CAST")
+                    if (household == null) {
+                        CloudDataState.Loading
+                    } else {
+                        CloudDataState.Ready(
+                            household = household,
+                            members = values[1] as List<HouseholdUserEntity>,
+                            categories = values[2] as List<CategoryEntity>,
+                            products = values[3] as List<ProductEntity>,
+                            aliases = values[4] as List<ProductAliasEntity>,
+                            movements = values[5] as List<StockMovementEntity>,
+                            checkouts = values[6] as List<MarketCheckoutEntity>
+                        )
+                    }
+                }
+            }
+        }
+        .catch { error ->
+            val firestoreError = error.unwrapFirestoreException()
+            if (firestoreError !is FirebaseFirestoreException && error is CancellationException) {
+                throw error
+            }
+            Log.w(TAG, "Erro no fluxo Firestore", firestoreError)
+            emit(CloudDataState.Error(firestoreError.localizedMessage ?: "Falha ao sincronizar dados com a nuvem."))
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            initialValue = CloudDataState.Loading
+        )
+
+    val uiState: StateFlow<AstroUiState> = combine(
+        cloudDataState,
+        prefs.isDarkMode,
+        filterState,
+        hasLocalMigration,
+        isSyncingWorkspace,
+        bootstrapError
+    ) { values ->
+        val cloud = values[0] as CloudDataState
+        val isDark = values[1] as Boolean
+        val filters = values[2] as FilterState
+        val localMig = values[3] as Boolean
+        val syncing = values[4] as Boolean
+        val bootErr = values[5] as String?
+
+        when (cloud) {
+            CloudDataState.Loading -> AstroUiState(
+                isLoading = bootErr == null,
+                isLoggedIn = true,
+                currentUserId = currentUserId,
+                userEmail = userEmail,
+                userName = userName,
+                cloudErrorMessage = bootErr,
+                isSyncingWorkspace = syncing,
+                isDarkMode = isDark,
+                productSearchQuery = filters.productSearchQuery,
+                selectedCategoryId = filters.selectedCategoryId,
+                onlyLowStock = filters.onlyLowStock,
+                movementFilterType = filters.movementFilterType
+            )
+
+            is CloudDataState.Error -> AstroUiState(
+                isLoading = false,
+                isLoggedIn = true,
+                currentUserId = currentUserId,
+                userEmail = userEmail,
+                userName = userName,
+                cloudErrorMessage = cloud.message,
+                isSyncingWorkspace = syncing,
+                isDarkMode = isDark,
+                productSearchQuery = filters.productSearchQuery,
+                selectedCategoryId = filters.selectedCategoryId,
+                onlyLowStock = filters.onlyLowStock,
+                movementFilterType = filters.movementFilterType
+            )
+
+            is CloudDataState.Ready -> AstroUiState(
+                isLoading = false,
+                isLoggedIn = true,
+                currentUserId = currentUserId,
+                userEmail = userEmail,
+                userName = userName,
+                householdId = cloud.household.docId,
+                householdName = cloud.household.name,
+                householdInviteCode = cloud.household.inviteCode,
+                householdOwnerUid = cloud.household.ownerUid,
+                memberCount = cloud.household.memberUids.size,
+                hasLocalMigrationAvailable = localMig,
+                cloudErrorMessage = bootErr,
+                isSyncingWorkspace = syncing,
+                isDarkMode = isDark,
+                categories = cloud.categories,
+                products = cloud.products,
+                aliases = cloud.aliases,
+                movements = cloud.movements,
+                checkouts = cloud.checkouts,
+                users = cloud.members,
+                productSearchQuery = filters.productSearchQuery,
+                selectedCategoryId = filters.selectedCategoryId,
+                onlyLowStock = filters.onlyLowStock,
+                movementFilterType = filters.movementFilterType
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        initialValue = AstroUiState(
+            isLoading = true,
+            isLoggedIn = true,
+            currentUserId = currentUserId,
+            userEmail = userEmail,
+            userName = userName
+        )
+    )
+
     init {
+        initializeCloudWorkspace()
+        observeHouseholdMembershipSync()
+    }
+
+    fun initializeCloudWorkspace() {
         viewModelScope.launch {
-            repository.ensureDefaultsSeeded()
+            bootstrapError.value = null
+            val wsResult = repository.ensureUserWorkspace(displayName = userName, email = userEmail)
+            wsResult.onFailure { err ->
+                bootstrapError.value = err.localizedMessage ?: "Não foi possível preparar seu espaço na nuvem."
+            }
+            val hasLocal = withContext(Dispatchers.IO) {
+                repository.hasLocalRoomProducts(localDb)
+            }
+            hasLocalMigration.value = hasLocal
         }
     }
 
-    val uiState: StateFlow<AstroUiState> = combine(
-        prefs.isLoggedIn,
-        prefs.userEmail,
-        prefs.userName,
-        prefs.isDarkMode,
-        repository.categories,
-        repository.products,
-        repository.aliases,
-        repository.movements,
-        repository.checkouts,
-        repository.users,
-        filterState
-    ) { values ->
-        @Suppress("UNCHECKED_CAST")
-        val filters = values[10] as FilterState
-        @Suppress("UNCHECKED_CAST")
-        AstroUiState(
-            isLoading = false,
-            isLoggedIn = values[0] as Boolean,
-            userEmail = values[1] as String,
-            userName = values[2] as String,
-            isDarkMode = values[3] as Boolean,
-            categories = values[4] as List<CategoryEntity>,
-            products = values[5] as List<ProductEntity>,
-            aliases = values[6] as List<ProductAliasEntity>,
-            movements = values[7] as List<StockMovementEntity>,
-            checkouts = values[8] as List<MarketCheckoutEntity>,
-            users = values[9] as List<HouseholdUserEntity>,
-            productSearchQuery = filters.productSearchQuery,
-            selectedCategoryId = filters.selectedCategoryId,
-            onlyLowStock = filters.onlyLowStock,
-            movementFilterType = filters.movementFilterType
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = AstroUiState(isLoading = true)
-    )
-
-    // ---- AUTENTICAÇÃO E PREFERÊNCIAS ----
-
-    fun signInWithPassword(email: String, password: String, onError: (String) -> Unit) {
+    private fun observeHouseholdMembershipSync() {
         viewModelScope.launch {
-            when (val outcome = repository.authenticateUser(email, password)) {
-                is AuthOutcome.Success -> prefs.signIn(outcome.user.email, outcome.user.name)
-                AuthOutcome.UserNotFound -> onError("E-mail não cadastrado. Toque em Cadastre-se para criar sua conta.")
-                AuthOutcome.WrongPassword -> onError("Senha incorreta. Tente novamente.")
-                AuthOutcome.NoPasswordConfigured -> onError("Este perfil é apenas de auditoria (sem senha). Crie uma conta própria para entrar.")
+            cloudDataState.collect { state ->
+                if (state is CloudDataState.Ready) {
+                    val sig = "${state.household.docId}:${state.household.memberUids.sorted().joinToString(",")}"
+                    if (sig != lastSyncedSignature && state.household.memberUids.size > 1) {
+                        lastSyncedSignature = sig
+                        repository.syncMemberUidsAcrossHousehold(state.household)
+                    }
+                }
             }
         }
     }
 
-    fun signUp(
-        name: String,
-        email: String,
-        password: String,
-        role: String,
-        onError: (String) -> Unit
-    ) {
-        viewModelScope.launch {
-            repository.registerUser(name = name, email = email, password = password, role = role).fold(
-                onSuccess = { user ->
-                    prefs.signIn(user.email, user.name)
-                    _snackbarMessages.tryEmit("Conta criada! Bem-vindo(a), ${user.name}.")
-                },
-                onFailure = { onError("Já existe um usuário cadastrado com este e-mail.") }
-            )
-        }
+    private fun activeReadyState(): CloudDataState.Ready? = cloudDataState.value as? CloudDataState.Ready
+
+    private fun emitResultError(err: Throwable, fallback: String) {
+        _snackbarMessages.tryEmit(err.localizedMessage ?: fallback)
     }
 
-    fun signOut() {
-        viewModelScope.launch { prefs.signOut() }
-    }
+    // ---- FAMÍLIA, CASA & PREFERÊNCIAS ----
 
     fun setDarkMode(enabled: Boolean) {
         viewModelScope.launch { prefs.setDarkMode(enabled) }
+    }
+
+    fun renameHousehold(newName: String) {
+        val ready = activeReadyState() ?: return
+        viewModelScope.launch {
+            isSyncingWorkspace.value = true
+            repository.renameHousehold(ready.household, newName).fold(
+                onSuccess = { _snackbarMessages.tryEmit("Nome do espaço atualizado!") },
+                onFailure = { emitResultError(it, "Falha ao renomear espaço.") }
+            )
+            isSyncingWorkspace.value = false
+        }
+    }
+
+    fun regenerateInviteCode() {
+        val ready = activeReadyState() ?: return
+        viewModelScope.launch {
+            isSyncingWorkspace.value = true
+            repository.regenerateInviteCode(ready.household).fold(
+                onSuccess = { code -> _snackbarMessages.tryEmit("Novo código da família gerado: $code") },
+                onFailure = { emitResultError(it, "Falha ao gerar novo código.") }
+            )
+            isSyncingWorkspace.value = false
+        }
+    }
+
+    fun joinHouseholdByCode(inviteCode: String) {
+        viewModelScope.launch {
+            isSyncingWorkspace.value = true
+            repository.joinHouseholdByInviteCode(inviteCode, userName, userEmail).fold(
+                onSuccess = { houseName ->
+                    _snackbarMessages.tryEmit("Você entrou em \"$houseName\"! Dados compartilhados sincronizados.")
+                },
+                onFailure = { emitResultError(it, "Código inválido ou não encontrado.") }
+            )
+            isSyncingWorkspace.value = false
+        }
+    }
+
+    fun createNewPersonalHousehold(name: String) {
+        viewModelScope.launch {
+            isSyncingWorkspace.value = true
+            repository.createPersonalHousehold(userName, userEmail, name).fold(
+                onSuccess = {
+                    _snackbarMessages.tryEmit("Novo espaço individual criado na nuvem!")
+                },
+                onFailure = { emitResultError(it, "Falha ao criar novo espaço.") }
+            )
+            isSyncingWorkspace.value = false
+        }
+    }
+
+    fun migrateLocalDataToCloud() {
+        val ready = activeReadyState() ?: return
+        viewModelScope.launch {
+            isSyncingWorkspace.value = true
+            val result = withContext(Dispatchers.IO) {
+                repository.migrateLocalRoomToCloud(ready.household, localDb)
+            }
+            result.fold(
+                onSuccess = { summary ->
+                    hasLocalMigration.value = false
+                    _snackbarMessages.tryEmit(
+                        "Migração concluída: ${summary.productsRestored} produto(s) enviados para a nuvem!"
+                    )
+                },
+                onFailure = { emitResultError(it, "Falha ao migrar dados locais para a nuvem.") }
+            )
+            isSyncingWorkspace.value = false
+        }
     }
 
     // ---- FILTROS E CATÁLOGO ----
@@ -163,18 +378,37 @@ class AstroViewModel(
     }
 
     fun saveProduct(product: ProductEntity) {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
-            repository.saveProduct(product, uiState.value.userName)
-            _snackbarMessages.tryEmit(
-                if (product.id == 0L) "Produto cadastrado no estoque" else "Produto atualizado"
+            repository.saveProduct(
+                household = ready.household,
+                product = product,
+                existingProducts = ready.products,
+                existingAliases = ready.aliases,
+                authorName = userName
+            ).fold(
+                onSuccess = {
+                    _snackbarMessages.tryEmit(
+                        if (product.id == 0L) "Produto cadastrado na nuvem" else "Produto atualizado"
+                    )
+                },
+                onFailure = { emitResultError(it, "Falha ao salvar produto.") }
             )
         }
     }
 
     fun deleteProduct(product: ProductEntity) {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
-            repository.deleteProduct(product.id)
-            _snackbarMessages.tryEmit("Produto ${product.name} excluído")
+            repository.deleteProduct(
+                household = ready.household,
+                productId = product.id,
+                existingAliases = ready.aliases,
+                existingMovements = ready.movements
+            ).fold(
+                onSuccess = { _snackbarMessages.tryEmit("Produto ${product.name} excluído") },
+                onFailure = { emitResultError(it, "Falha ao excluir produto.") }
+            )
         }
     }
 
@@ -185,16 +419,21 @@ class AstroViewModel(
         unitPriceOverride: Double?,
         reason: String
     ) {
+        val ready = activeReadyState() ?: return
+        val product = ready.products.firstOrNull { it.id == productId } ?: return
         viewModelScope.launch {
             repository.registerMovement(
-                productId = productId,
+                household = ready.household,
+                product = product,
                 type = type,
                 amountOrTargetBalance = amountOrBalance,
                 unitPriceOverride = unitPriceOverride,
                 reason = reason,
-                authorName = uiState.value.userName
+                authorName = userName
+            ).fold(
+                onSuccess = { _snackbarMessages.tryEmit("${type.label} registrada com auditoria") },
+                onFailure = { emitResultError(it, "Falha ao registrar movimentação.") }
             )
-            _snackbarMessages.tryEmit("${type.label} registrada com auditoria")
         }
     }
 
@@ -244,11 +483,22 @@ class AstroViewModel(
     }
 
     fun linkScannedCodeToExistingProduct(product: ProductEntity, scannedCode: String) {
+        val ready = activeReadyState() ?: return
         val marketName = _posState.value.storeName
         viewModelScope.launch {
-            repository.linkAliasToProduct(product.id, scannedCode, marketName)
-            addProductToPosCart(product, scannedCodeUsed = scannedCode)
-            _snackbarMessages.tryEmit("Código $scannedCode vinculado a ${product.name} (${product.uniqueCode})!")
+            repository.linkAliasToProduct(
+                household = ready.household,
+                product = product,
+                externalCode = scannedCode,
+                marketName = marketName,
+                existingAliases = ready.aliases
+            ).fold(
+                onSuccess = {
+                    addProductToPosCart(product, scannedCodeUsed = scannedCode)
+                    _snackbarMessages.tryEmit("Código $scannedCode vinculado a ${product.name} (${product.uniqueCode})!")
+                },
+                onFailure = { emitResultError(it, "Falha ao vincular código.") }
+            )
         }
     }
 
@@ -260,31 +510,39 @@ class AstroViewModel(
         quantity: Double,
         categoryId: Long?
     ) {
+        val ready = activeReadyState() ?: return
         val marketName = _posState.value.storeName
         val saveToStock = _posState.value.saveToStock
         viewModelScope.launch {
             if (saveToStock) {
-                val resolution = repository.resolveOrCreateCanonicalProduct(
+                repository.resolveOrCreateCanonicalProduct(
+                    household = ready.household,
+                    existingProducts = ready.products,
+                    existingAliases = ready.aliases,
                     scannedCode = scannedCode,
                     name = name,
                     unit = unit,
                     unitPrice = unitPrice,
                     marketName = marketName,
                     categoryId = categoryId
+                ).fold(
+                    onSuccess = { resolution ->
+                        val prod = resolution.product
+                        upsertProductIntoCart(
+                            product = prod,
+                            scannedCodeUsed = scannedCode.ifBlank { prod.code },
+                            quantityToAdd = quantity,
+                            unitPriceOverride = unitPrice.takeIf { it > 0.0 }
+                        )
+                        val msg = when (resolution.matchedBy) {
+                            "name" -> "Nome já existente! Vinculado ao código único ${prod.uniqueCode} sem duplicar."
+                            "code" -> "Item localizado (${prod.uniqueCode}) e adicionado ao carrinho."
+                            else -> "Novo produto criado com código único ${prod.uniqueCode}."
+                        }
+                        _snackbarMessages.tryEmit(msg)
+                    },
+                    onFailure = { emitResultError(it, "Falha ao salvar novo item.") }
                 )
-                val prod = resolution.product
-                upsertProductIntoCart(
-                    product = prod,
-                    scannedCodeUsed = scannedCode.ifBlank { prod.code },
-                    quantityToAdd = quantity,
-                    unitPriceOverride = unitPrice.takeIf { it > 0.0 }
-                )
-                val msg = when (resolution.matchedBy) {
-                    "name" -> "Nome já existente! Vinculado ao código único ${prod.uniqueCode} sem duplicar."
-                    "code" -> "Item localizado (${prod.uniqueCode}) e adicionado ao carrinho."
-                    else -> "Novo produto criado com código único ${prod.uniqueCode}."
-                }
-                _snackbarMessages.tryEmit(msg)
             } else {
                 val existingByName = ProductMatcher.findByNormalizedName(uiState.value.products, name)
                 if (existingByName != null) {
@@ -423,10 +681,14 @@ class AstroViewModel(
     }
 
     fun finalizePosCheckout() {
+        val ready = activeReadyState() ?: return
         val current = _posState.value
         if (current.cartItems.isEmpty()) return
         viewModelScope.launch {
             repository.finalizeMarketPosCheckout(
+                household = ready.household,
+                existingProducts = ready.products,
+                existingAliases = ready.aliases,
                 storeName = current.storeName,
                 notes = current.notes,
                 entries = current.cartItems.map { item ->
@@ -441,75 +703,96 @@ class AstroViewModel(
                     )
                 },
                 saveToStock = current.saveToStock,
-                authorName = uiState.value.userName
-            )
-            _posState.value = PosMarketState(saveToStock = current.saveToStock)
-            _snackbarMessages.tryEmit(
-                if (current.saveToStock) {
-                    "Compra finalizada! Itens salvos no estoque e histórico financeiro atualizado."
-                } else {
-                    "Compra registrada nas finanças sem alterar o saldo do estoque."
-                }
+                authorName = userName
+            ).fold(
+                onSuccess = {
+                    _posState.value = PosMarketState(saveToStock = current.saveToStock)
+                    _snackbarMessages.tryEmit(
+                        if (current.saveToStock) {
+                            "Compra finalizada! Itens salvos na nuvem e histórico financeiro atualizado."
+                        } else {
+                            "Compra registrada nas finanças sem alterar o saldo do estoque."
+                        }
+                    )
+                },
+                onFailure = { emitResultError(it, "Falha ao finalizar compra.") }
             )
         }
     }
 
-    // ---- CATEGORIAS E USUÁRIOS ----
+    // ---- CATEGORIAS E MORADORES ----
 
     fun saveCategory(category: CategoryEntity) {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
-            repository.saveCategory(category)
-            _snackbarMessages.tryEmit(if (category.id == 0L) "Categoria criada" else "Categoria atualizada")
+            repository.saveCategory(ready.household, category).fold(
+                onSuccess = {
+                    _snackbarMessages.tryEmit(if (category.id == 0L) "Categoria criada" else "Categoria atualizada")
+                },
+                onFailure = { emitResultError(it, "Falha ao salvar categoria.") }
+            )
         }
     }
 
     fun deleteCategory(category: CategoryEntity) {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
-            repository.deleteCategory(category.id)
-            _snackbarMessages.tryEmit("Categoria ${category.name} removida")
+            repository.deleteCategory(ready.household, category.id).fold(
+                onSuccess = { _snackbarMessages.tryEmit("Categoria ${category.name} removida") },
+                onFailure = { emitResultError(it, "Falha ao remover categoria.") }
+            )
         }
     }
 
-    fun addUser(name: String, email: String, role: String, password: String = "") {
+    fun addUser(name: String, email: String, role: String, @Suppress("UNUSED_PARAMETER") password: String = "") {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
-            val cleanPassword = password.trim()
-            val passwordHash = if (cleanPassword.length >= 6) {
-                AstroRepository.hashPassword(cleanPassword)
-            } else {
-                ""
-            }
-            repository.saveUser(
-                HouseholdUserEntity(
-                    name = name.trim(),
-                    email = email.trim().lowercase(),
-                    passwordHash = passwordHash,
-                    role = role
-                )
+            repository.addOperatorMember(
+                household = ready.household,
+                name = name,
+                email = email,
+                role = role
+            ).fold(
+                onSuccess = { _snackbarMessages.tryEmit("Operador ${name.trim()} adicionado") },
+                onFailure = { emitResultError(it, "Falha ao adicionar operador.") }
             )
-            _snackbarMessages.tryEmit("Usuário ${name.trim()} adicionado")
         }
     }
 
     fun deleteUser(user: HouseholdUserEntity) {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
-            repository.deleteUser(user.id)
-            _snackbarMessages.tryEmit("Usuário removido")
+            repository.deleteMember(ready.household, user.id).fold(
+                onSuccess = { _snackbarMessages.tryEmit("Operador removido") },
+                onFailure = { emitResultError(it, "Falha ao remover operador.") }
+            )
         }
     }
 
     fun loadSampleCatalog() {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
-            val author = uiState.value.userName.ifBlank { "Morador" }
-            repository.loadSampleCatalog(author)
-            _snackbarMessages.tryEmit("Catálogo de exemplo carregado com códigos únicos AST")
+            repository.loadSampleCatalog(ready.household, userName).fold(
+                onSuccess = {
+                    _snackbarMessages.tryEmit("Catálogo de exemplo carregado na nuvem com códigos AST")
+                },
+                onFailure = { emitResultError(it, "Falha ao carregar catálogo de exemplo.") }
+            )
         }
     }
 
     fun exportBackupToUri(context: Context, uri: Uri) {
+        val state = uiState.value
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    val json = repository.exportBackupJson()
+                    val json = repository.exportBackupJson(
+                        categories = state.categories,
+                        products = state.products,
+                        aliases = state.aliases,
+                        movements = state.movements,
+                        checkouts = state.checkouts
+                    )
                     context.contentResolver.openOutputStream(uri)?.use { stream ->
                         stream.write(json.toByteArray(Charsets.UTF_8))
                     } ?: error("Não foi possível abrir o destino selecionado.")
@@ -525,6 +808,7 @@ class AstroViewModel(
     }
 
     fun importBackupFromUri(context: Context, uri: Uri) {
+        val ready = activeReadyState() ?: return
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
@@ -532,13 +816,13 @@ class AstroViewModel(
                         ?.bufferedReader(Charsets.UTF_8)
                         ?.use { it.readText() }
                         ?: error("Não foi possível ler o arquivo selecionado.")
-                    repository.importBackupJson(raw).getOrThrow()
+                    repository.importBackupJson(ready.household, raw).getOrThrow()
                 }
             }
             result.fold(
                 onSuccess = { summary ->
                     _snackbarMessages.tryEmit(
-                        "Backup restaurado: ${summary.productsRestored} produto(s), ${summary.categoriesRestored} categoria(s)."
+                        "Backup restaurado na nuvem: ${summary.productsRestored} produto(s), ${summary.categoriesRestored} categoria(s)."
                     )
                 },
                 onFailure = { err ->
@@ -555,7 +839,8 @@ class AstroViewModel(
             appendLine("Versão: ${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})")
             appendLine("Dispositivo: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
             appendLine("Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
-            appendLine("Registros locais: ${state.products.size} produtos, ${state.categories.size} categorias, ${state.movements.size} movimentações, ${state.checkouts.size} compras")
+            appendLine("Espaço na nuvem: ${state.householdName} (${state.memberCount} membro(s))")
+            appendLine("Registros sincronizados: ${state.products.size} produtos, ${state.categories.size} categorias, ${state.movements.size} movimentações, ${state.checkouts.size} compras")
             appendLine()
             appendLine("Descreva aqui o que aconteceu ou sua sugestão:")
         }
@@ -655,7 +940,7 @@ class AstroViewModel(
                                 activePortalUrl = qrRaw,
                                 storeName = ocrResult.storeName,
                                 parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                                statusMessage = "QR Code (${portal.ufSigla}) detectado e ${ocrResult.items.size} item(ns) extraído(s) via leitura ótica (OCR)! Confira abaixo."
+                                statusMessage = "QR Code (${portal.ufSigla}) detectado e ${ocrResult.items.size} item(ns) extraído(s) via OCR! Confira abaixo ou abra o link oficial da SEFAZ se faltar algum item."
                             )
                         }
                         else -> {
@@ -733,9 +1018,13 @@ class AstroViewModel(
             statusMessage = if (current.detectedKey != null) {
                 "Portal ${current.selectedPortal.ufSigla} aberto. Chave detectada (${current.detectedKey.take(8)}…): toque em \"Preencher Chave\", resolva o CAPTCHA e os itens serão capturados."
             } else {
-                "Consulte a nota no portal ${current.selectedPortal.ufSigla} abaixo e toque em \"Extrair Itens da Página\"."
+                "Consulte a nota no portal ${current.selectedPortal.ufSigla} abaixo e toque em \"Extrair Itens\"."
             }
         )
+    }
+
+    fun dismissWebPortal() {
+        _nfceState.value = _nfceState.value.copy(showWebPortal = false)
     }
 
     fun consultNfceInput() {
@@ -808,6 +1097,7 @@ class AstroViewModel(
             _nfceState.value = _nfceState.value.copy(
                 storeName = result.storeName ?: _nfceState.value.storeName,
                 parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
+                showWebPortal = false,
                 statusMessage = result.message
             )
         } else if (!isAutoScan) {
@@ -832,32 +1122,51 @@ class AstroViewModel(
     }
 
     fun confirmNfceImport(onSuccess: () -> Unit) {
+        val ready = activeReadyState() ?: return
         val state = _nfceState.value
         val defaultCat = uiState.value.categories.firstOrNull()?.id
         viewModelScope.launch {
-            val count = repository.importNfceItems(
+            repository.importNfceItems(
+                household = ready.household,
+                existingProducts = ready.products,
+                existingAliases = ready.aliases,
                 items = state.parsedItems,
                 storeName = state.storeName,
                 defaultCategoryId = defaultCat,
-                authorName = uiState.value.userName
+                authorName = userName
+            ).fold(
+                onSuccess = { count ->
+                    if (count > 0) {
+                        _snackbarMessages.tryEmit("$count item(ns) importado(s) da NFC-e na nuvem!")
+                        _nfceState.value = NfceImportState()
+                        onSuccess()
+                    } else {
+                        _snackbarMessages.tryEmit("Selecione ao menos um item para importar.")
+                    }
+                },
+                onFailure = { emitResultError(it, "Falha ao importar itens do cupom.") }
             )
-            if (count > 0) {
-                _snackbarMessages.tryEmit("$count item(ns) importado(s) da NFC-e com auditoria!")
-                _nfceState.value = NfceImportState()
-                onSuccess()
-            } else {
-                _snackbarMessages.tryEmit("Selecione ao menos um item para importar.")
-            }
         }
     }
 
     class Factory(
-        private val repository: AstroRepository,
-        private val prefs: ThemePreferencesRepository
+        private val repository: FirestoreAstroRepository,
+        private val prefs: ThemePreferencesRepository,
+        private val localDb: AppDatabase,
+        private val currentUserId: String,
+        private val userEmail: String,
+        private val userName: String
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return AstroViewModel(repository, prefs) as T
+            return AstroViewModel(
+                repository = repository,
+                prefs = prefs,
+                localDb = localDb,
+                currentUserId = currentUserId,
+                userEmail = userEmail,
+                userName = userName
+            ) as T
         }
     }
 }

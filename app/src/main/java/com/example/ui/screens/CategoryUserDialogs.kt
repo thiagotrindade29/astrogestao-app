@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.R
@@ -157,15 +158,19 @@ fun UserEditorDialog(
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("Morador") }
     var errorText by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Novo Morador / Usuário", style = MaterialTheme.typography.titleLarge) },
+        title = { Text("Adicionar Operador", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Adicione um perfil de referência da casa. Para sincronizar em outro celular, compartilhe o Código da Família na aba Mais.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 OutlinedTextField(
                     value = name,
                     onValueChange = {
@@ -182,21 +187,8 @@ fun UserEditorDialog(
                         email = it
                         errorText = null
                     },
-                    label = { Text(stringResource(R.string.label_email)) },
+                    label = { Text("${stringResource(R.string.label_email)} (opcional)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = {
-                        password = it
-                        errorText = null
-                    },
-                    label = { Text("Senha de acesso (opcional)") },
-                    supportingText = {
-                        Text("Opcional (mín. 6 caracteres) se este usuário for entrar no app.")
-                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -221,19 +213,133 @@ fun UserEditorDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val trimmedPassword = password.trim()
+                    val trimmedEmail = email.trim()
                     when {
-                        name.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> {
-                            errorText = "Informe nome e e-mail válidos."
+                        name.isBlank() -> errorText = "Informe o nome do morador ou operador."
+                        trimmedEmail.isNotEmpty() && !Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches() -> {
+                            errorText = "Informe um e-mail válido ou deixe em branco."
                         }
-                        trimmedPassword.isNotEmpty() && trimmedPassword.length < 6 -> {
-                            errorText = "A senha deve ter ao menos 6 caracteres (ou deixe em branco)."
-                        }
-                        else -> onSave(name.trim(), email.trim(), role, trimmedPassword)
+                        else -> onSave(name.trim(), trimmedEmail, role, "")
                     }
                 }
             ) {
                 Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun JoinHouseholdDialog(
+    onJoin: (code: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var code by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Entrar em Casa da Família", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Digite o código de convite de 8 caracteres exibido no celular do familiar que administra a casa.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = {
+                        code = it.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(16)
+                        errorText = null
+                    },
+                    label = { Text("Código de convite (ex: ASTRO7K9)") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("join_household_code_input")
+                )
+                errorText?.let { msg ->
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val clean = code.trim().uppercase()
+                    if (clean.length < 6) {
+                        errorText = "Informe um código válido (mínimo 6 caracteres)."
+                    } else {
+                        onJoin(clean)
+                    }
+                },
+                modifier = Modifier.testTag("confirm_join_household_button")
+            ) {
+                Text("Entrar na Casa")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun HouseholdNameDialog(
+    title: String,
+    initialName: String,
+    confirmLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var isError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = {
+                    name = it.take(80)
+                    isError = false
+                },
+                label = { Text("Nome do espaço / casa") },
+                isError = isError,
+                supportingText = if (isError) {
+                    { Text(stringResource(R.string.error_required)) }
+                } else null,
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("household_name_input")
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isBlank()) {
+                        isError = true
+                    } else {
+                        onConfirm(name.trim())
+                    }
+                }
+            ) {
+                Text(confirmLabel)
             }
         },
         dismissButton = {

@@ -74,8 +74,17 @@ data class NfceImportState(
 data class AstroUiState(
     val isLoading: Boolean = true,
     val isLoggedIn: Boolean = false,
+    val currentUserId: String = "",
     val userEmail: String = "",
     val userName: String = "",
+    val householdId: String = "",
+    val householdName: String = "",
+    val householdInviteCode: String = "",
+    val householdOwnerUid: String = "",
+    val memberCount: Int = 1,
+    val hasLocalMigrationAvailable: Boolean = false,
+    val cloudErrorMessage: String? = null,
+    val isSyncingWorkspace: Boolean = false,
     val isDarkMode: Boolean = false,
     val categories: List<CategoryEntity> = emptyList(),
     val products: List<ProductEntity> = emptyList(),
@@ -88,6 +97,8 @@ data class AstroUiState(
     val onlyLowStock: Boolean = false,
     val movementFilterType: MovementType? = null
 ) {
+    val isHouseholdOwner: Boolean
+        get() = currentUserId.isNotBlank() && currentUserId == householdOwnerUid
     val categoryMap: Map<Long, CategoryEntity>
         get() = categories.associateBy { it.id }
 

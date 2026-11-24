@@ -121,23 +121,47 @@ object SefazPortals {
             if (items.length === 0) {
                 var tables = document.querySelectorAll('table');
                 tables.forEach(function(tbl) {
-                    var headerText = (tbl.rows[0] ? tbl.rows[0].innerText : '').toLowerCase();
-                    if (headerText.indexOf('descri') >= 0 || headerText.indexOf('produto') >= 0 || headerText.indexOf('qtde') >= 0 || headerText.indexOf('item') >= 0 || headerText.indexOf('mercadoria') >= 0) {
+                    if (!tbl.rows || tbl.rows.length < 2) return;
+                    var headerCells = Array.from(tbl.rows[0].cells || []).map(function(c) {
+                        return (c.innerText || '').toLowerCase().trim();
+                    });
+                    var headerJoined = headerCells.join(' ');
+                    if (headerJoined.indexOf('descri') >= 0 || headerJoined.indexOf('produto') >= 0 || headerJoined.indexOf('qtde') >= 0 || headerJoined.indexOf('qtd') >= 0 || headerJoined.indexOf('mercadoria') >= 0) {
+                        var descIdx = headerCells.findIndex(function(h) { return h.indexOf('descri') >= 0 || h.indexOf('produto') >= 0 || h.indexOf('mercadoria') >= 0; });
+                        var codeIdx = headerCells.findIndex(function(h) { return h.indexOf('cód') >= 0 || h.indexOf('cod') >= 0; });
+                        var qtyIdx = headerCells.findIndex(function(h) { return h.indexOf('qtd') >= 0 || h.indexOf('quant') >= 0; });
+                        var unitIdx = headerCells.findIndex(function(h) { return h === 'un' || h === 'un.' || h.indexOf('unid') >= 0; });
+                        var priceIdx = headerCells.findIndex(function(h) { return h.indexOf('unit') >= 0 || h.indexOf('vl. un') >= 0 || h.indexOf('valor un') >= 0; });
+                        var totalIdx = headerCells.findIndex(function(h) { return h.indexOf('total') >= 0; });
+
                         for (var r = 1; r < tbl.rows.length; r++) {
                             var cells = tbl.rows[r].cells;
                             if (!cells || cells.length < 3) continue;
-                            var texts = Array.from(cells).map(function(c) { return (c.innerText || '').trim(); });
-                            var desc = texts.find(function(t) { return t.length > 3 && !/^[0-9.,\sR$]+$/.test(t); }) || '';
+                            var texts = Array.from(cells).map(function(c) { return (c.innerText || '').replace(/\s+/g, ' ').trim(); });
+                            var desc = (descIdx >= 0 && texts[descIdx]) ? texts[descIdx] : (texts.find(function(t) {
+                                var letters = (t.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+                                return letters >= 3 && !/^(un|und|kg|g|l|ml|pct|cx|pc|lt)$/i.test(t);
+                            }) || '');
                             if (!desc || desc.toLowerCase().indexOf('total') === 0 || desc.toLowerCase().indexOf('subtotal') === 0) continue;
-                            var nums = texts.filter(function(t) { return /^[0-9.,\sR$]+$/.test(t.replace('R$','').trim()) && /[0-9]/.test(t); });
-                            var unit = texts.find(function(t) { return /^(un|und|kg|g|l|ml|pct|cx|pc|lt)$/i.test(t); }) || 'un';
-                            var code = texts.find(function(t) { return /^[0-9]{4,14}$/.test(t); }) || '';
+
+                            var code = (codeIdx >= 0 && texts[codeIdx]) ? texts[codeIdx] : (texts.find(function(t) { return /^[0-9]{4,14}$/.test(t); }) || '');
+                            var qty = (qtyIdx >= 0 && texts[qtyIdx]) ? texts[qtyIdx] : '1';
+                            var unit = (unitIdx >= 0 && texts[unitIdx]) ? texts[unitIdx] : (texts.find(function(t) { return /^(un|und|unid|kg|g|gr|l|ml|pct|cx|pc|lt)$/i.test(t); }) || 'un');
+                            var unitPrice = (priceIdx >= 0 && texts[priceIdx]) ? texts[priceIdx] : ((totalIdx >= 0 && texts[totalIdx]) ? texts[totalIdx] : '0');
+
+                            if (priceIdx < 0) {
+                                var nums = texts.filter(function(t) { return /^[0-9.,\sR$]+$/.test(t.replace('R$','').trim()) && /[0-9]/.test(t); });
+                                if (nums.length >= 1 && qtyIdx < 0) qty = nums[0];
+                                if (nums.length >= 2) unitPrice = nums[1];
+                                else if (nums.length === 1) unitPrice = nums[0];
+                            }
+
                             items.push({
                                 code: code,
                                 name: desc,
-                                qty: nums.length >= 1 ? nums[0] : '1',
+                                qty: qty,
                                 unit: unit,
-                                unitPrice: nums.length >= 2 ? nums[1] : '0'
+                                unitPrice: unitPrice
                             });
                         }
                     }

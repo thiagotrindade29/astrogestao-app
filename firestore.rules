@@ -1,0 +1,467 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---- GLOBAL PRIMITIVES ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidInviteCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 16 && code.matches('^[A-Z0-9]+$');
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidMemberUids(uids) {
+      return uids is list && uids.size() >= 1 && uids.size() <= 20 && uids[0] is string && uids[0].size() >= 1 && uids[0].size() <= 128;
+    }
+
+    function isHouseholdMember(householdId) {
+      return exists(/databases/$(database)/documents/households/$(householdId)) &&
+             request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.memberUids;
+    }
+
+    // ---- VALIDATION HELPERS (ANTI-UPDATE-GAP) ----
+    function isValidUserProfile(data) {
+      return isValidId(data.uid) &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 160 &&
+             isValidId(data.activeHouseholdId);
+    }
+
+    function isValidHousehold(data) {
+      return isValidId(data.ownerUid) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             isValidInviteCode(data.inviteCode) &&
+             isValidMemberUids(data.memberUids) &&
+             data.nextProductSeq is int && data.nextProductSeq >= 1 && data.nextProductSeq <= 10000000;
+    }
+
+    function isValidHouseholdInvite(data) {
+      return isValidId(data.householdId) &&
+             data.householdName is string && data.householdName.size() >= 1 && data.householdName.size() <= 80 &&
+             isValidId(data.ownerUid);
+    }
+
+    function isValidHouseholdMember(data) {
+      return isValidId(data.householdId) &&
+             isValidMemberUids(data.memberUids) &&
+             data.uid is string && data.uid.size() <= 128 &&
+             data.localId is int && data.localId >= 1 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.email is string && data.email.size() <= 160 &&
+             data.role in ['Administrador', 'Morador'] &&
+             data.createdAtMillis is int && data.createdAtMillis >= 0;
+    }
+
+    function isValidCategory(data) {
+      return isValidId(data.householdId) &&
+             isValidMemberUids(data.memberUids) &&
+             data.localId is int && data.localId >= 1 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.colorHex is int &&
+             data.sectorNote is string && data.sectorNote.size() <= 200;
+    }
+
+    function isValidProduct(data) {
+      return isValidId(data.householdId) &&
+             isValidMemberUids(data.memberUids) &&
+             data.localId is int && data.localId >= 1 &&
+             data.uniqueCode is string && data.uniqueCode.size() >= 1 && data.uniqueCode.size() <= 32 &&
+             data.code is string && data.code.size() <= 64 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+             (!('categoryId' in data) || data.categoryId == null || (data.categoryId is int && data.categoryId >= 1)) &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 20 &&
+             data.quantity is number && data.quantity >= 0.0 &&
+             data.minStock is number && data.minStock >= 0.0 &&
+             data.unitPrice is number && data.unitPrice >= 0.0 &&
+             (!('lastPaidPrice' in data) || data.lastPaidPrice == null || (data.lastPaidPrice is number && data.lastPaidPrice >= 0.0)) &&
+             (!('expiryDateMillis' in data) || data.expiryDateMillis == null || (data.expiryDateMillis is int && data.expiryDateMillis >= 0)) &&
+             data.notes is string && data.notes.size() <= 500 &&
+             data.updatedAtMillis is int && data.updatedAtMillis >= 0;
+    }
+
+    function isValidProductAlias(data) {
+      return isValidId(data.householdId) &&
+             isValidMemberUids(data.memberUids) &&
+             data.localId is int && data.localId >= 1 &&
+             data.productId is int && data.productId >= 1 &&
+             data.externalCode is string && data.externalCode.size() >= 1 && data.externalCode.size() <= 64 &&
+             data.marketName is string && data.marketName.size() <= 100 &&
+             data.createdAtMillis is int && data.createdAtMillis >= 0;
+    }
+
+    function isValidStockMovement(data) {
+      return isValidId(data.householdId) &&
+             isValidMemberUids(data.memberUids) &&
+             data.localId is int && data.localId >= 1 &&
+             data.productId is int && data.productId >= 1 &&
+             data.productNameSnapshot is string && data.productNameSnapshot.size() >= 1 && data.productNameSnapshot.size() <= 160 &&
+             data.productUnitSnapshot is string && data.productUnitSnapshot.size() >= 1 && data.productUnitSnapshot.size() <= 20 &&
+             data.type in ['ENTRADA', 'SAIDA', 'AJUSTE'] &&
+             data.quantityDelta is number &&
+             data.previousBalance is number && data.previousBalance >= 0.0 &&
+             data.newBalance is number && data.newBalance >= 0.0 &&
+             data.unitPrice is number && data.unitPrice >= 0.0 &&
+             data.totalValue is number && data.totalValue >= 0.0 &&
+             data.reason is string && data.reason.size() <= 300 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
+             data.timestampMillis is int && data.timestampMillis >= 0;
+    }
+
+    function isValidMarketCheckout(data) {
+      return isValidId(data.householdId) &&
+             isValidMemberUids(data.memberUids) &&
+             data.localId is int && data.localId >= 1 &&
+             data.storeName is string && data.storeName.size() >= 1 && data.storeName.size() <= 120 &&
+             data.notes is string && data.notes.size() <= 500 &&
+             data.totalAmount is number && data.totalAmount >= 0.0 &&
+             data.itemCount is int && data.itemCount >= 0 &&
+             data.savedToStock is bool &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
+             data.timestampMillis is int && data.timestampMillis >= 0;
+    }
+
+    // ---- 1. PRIVATE USER PROFILES (PII ISOLATED TO OWNER) ----
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().uid == request.auth.uid &&
+                       incoming().keys().hasAll(['uid', 'displayName', 'email', 'activeHouseholdId', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['uid', 'displayName', 'email', 'activeHouseholdId', 'createdAt', 'updatedAt']) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().uid == existing().uid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'activeHouseholdId', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // ---- 2. NON-ENUMERABLE HOUSEHOLD INVITES ----
+    match /householdInvites/{inviteCode} {
+      // Only direct lookup by exact invite code; enumeration (list) is strictly forbidden
+      allow get: if isSignedIn() && isValidInviteCode(inviteCode);
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidInviteCode(inviteCode) &&
+                       incoming().ownerUid == request.auth.uid &&
+                       incoming().keys().hasAll(['householdId', 'householdName', 'ownerUid', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['householdId', 'householdName', 'ownerUid', 'createdAt', 'updatedAt']) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       isValidHouseholdInvite(incoming()) &&
+                       exists(/databases/$(database)/documents/households/$(incoming().householdId)) &&
+                       get(/databases/$(database)/documents/households/$(incoming().householdId)).data.ownerUid == request.auth.uid;
+
+      allow update: if isSignedIn() &&
+                       isValidInviteCode(inviteCode) &&
+                       isValidHouseholdInvite(incoming()) &&
+                       existing().ownerUid == request.auth.uid &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().householdId == existing().householdId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['householdName', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidInviteCode(inviteCode) && existing().ownerUid == request.auth.uid;
+    }
+
+    // ---- 3. HOUSEHOLD WORKSPACES & SHARED SUBCOLLECTIONS ----
+    match /households/{householdId} {
+      allow get: if isSignedIn() && isValidId(householdId) && request.auth.uid in existing().memberUids;
+      allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+      allow create: if isSignedIn() &&
+                       isValidId(householdId) &&
+                       incoming().ownerUid == request.auth.uid &&
+                       request.auth.uid in incoming().memberUids &&
+                       incoming().memberUids.size() == 1 &&
+                       incoming().keys().hasAll(['ownerUid', 'name', 'inviteCode', 'memberUids', 'nextProductSeq', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['ownerUid', 'name', 'inviteCode', 'memberUids', 'nextProductSeq', 'createdAt', 'updatedAt']) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       isValidHousehold(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(householdId) &&
+                       isValidHousehold(incoming()) &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       (
+                         // Action: Member edits workspace name, invite code, or product sequence
+                         (
+                           request.auth.uid in existing().memberUids &&
+                           incoming().memberUids == existing().memberUids &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['name', 'inviteCode', 'nextProductSeq', 'updatedAt'])
+                         ) ||
+                         // Action: User joins household via verified invite lookup
+                         (
+                           !(request.auth.uid in existing().memberUids) &&
+                           request.auth.uid in incoming().memberUids &&
+                           incoming().memberUids.hasAll(existing().memberUids) &&
+                           incoming().memberUids.size() == existing().memberUids.size() + 1 &&
+                           incoming().memberUids.size() <= 20 &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']) &&
+                           exists(/databases/$(database)/documents/householdInvites/$(existing().inviteCode)) &&
+                           get(/databases/$(database)/documents/householdInvites/$(existing().inviteCode)).data.householdId == householdId
+                         ) ||
+                         // Action: Member leaves or owner removes another member (owner remains)
+                         (
+                           request.auth.uid in existing().memberUids &&
+                           (request.auth.uid == existing().ownerUid || !(request.auth.uid in incoming().memberUids)) &&
+                           existing().ownerUid in incoming().memberUids &&
+                           existing().memberUids.hasAll(incoming().memberUids) &&
+                           incoming().memberUids.size() == existing().memberUids.size() - 1 &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(householdId) && existing().ownerUid == request.auth.uid;
+
+      // 3a. Members / Operators
+      match /members/{memberId} {
+        allow get: if isSignedIn() && isValidId(householdId) && isValidId(memberId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(memberId) &&
+                         incoming().householdId == householdId &&
+                         request.auth.uid in incoming().memberUids &&
+                         incoming().keys().hasAll(['householdId', 'memberUids', 'uid', 'localId', 'name', 'email', 'role', 'createdAtMillis', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['householdId', 'memberUids', 'uid', 'localId', 'name', 'email', 'role', 'createdAtMillis', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidHouseholdMember(incoming()) &&
+                         isHouseholdMember(householdId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(memberId) &&
+                         isValidHouseholdMember(incoming()) &&
+                         incoming().householdId == existing().householdId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         (
+                           (
+                             request.auth.uid in existing().memberUids &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'role', 'memberUids', 'updatedAt'])
+                           ) ||
+                           (
+                             isHouseholdMember(householdId) &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+                           )
+                         );
+
+        allow delete: if isSignedIn() && isValidId(householdId) && isValidId(memberId) && request.auth.uid in existing().memberUids;
+      }
+
+      // 3b. Categories
+      match /categories/{categoryId} {
+        allow get: if isSignedIn() && isValidId(householdId) && isValidId(categoryId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(categoryId) &&
+                         incoming().householdId == householdId &&
+                         request.auth.uid in incoming().memberUids &&
+                         incoming().keys().hasAll(['householdId', 'memberUids', 'localId', 'name', 'colorHex', 'sectorNote', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['householdId', 'memberUids', 'localId', 'name', 'colorHex', 'sectorNote', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidCategory(incoming()) &&
+                         isHouseholdMember(householdId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(categoryId) &&
+                         isValidCategory(incoming()) &&
+                         incoming().householdId == existing().householdId &&
+                         incoming().localId == existing().localId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         (
+                           (
+                             request.auth.uid in existing().memberUids &&
+                             incoming().memberUids == existing().memberUids &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['name', 'colorHex', 'sectorNote', 'updatedAt'])
+                           ) ||
+                           (
+                             isHouseholdMember(householdId) &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+                           )
+                         );
+
+        allow delete: if isSignedIn() && isValidId(householdId) && isValidId(categoryId) && request.auth.uid in existing().memberUids;
+      }
+
+      // 3c. Products
+      match /products/{productId} {
+        allow get: if isSignedIn() && isValidId(householdId) && isValidId(productId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(productId) &&
+                         incoming().householdId == householdId &&
+                         request.auth.uid in incoming().memberUids &&
+                         incoming().keys().hasAll(['householdId', 'memberUids', 'localId', 'uniqueCode', 'code', 'name', 'unit', 'quantity', 'minStock', 'unitPrice', 'notes', 'updatedAtMillis', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['householdId', 'memberUids', 'localId', 'uniqueCode', 'code', 'name', 'categoryId', 'unit', 'quantity', 'minStock', 'unitPrice', 'lastPaidPrice', 'expiryDateMillis', 'notes', 'updatedAtMillis', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidProduct(incoming()) &&
+                         isHouseholdMember(householdId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(productId) &&
+                         isValidProduct(incoming()) &&
+                         incoming().householdId == existing().householdId &&
+                         incoming().localId == existing().localId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         (
+                           (
+                             request.auth.uid in existing().memberUids &&
+                             incoming().memberUids == existing().memberUids &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['uniqueCode', 'code', 'name', 'categoryId', 'unit', 'quantity', 'minStock', 'unitPrice', 'lastPaidPrice', 'expiryDateMillis', 'notes', 'updatedAtMillis', 'updatedAt'])
+                           ) ||
+                           (
+                             isHouseholdMember(householdId) &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+                           )
+                         );
+
+        allow delete: if isSignedIn() && isValidId(householdId) && isValidId(productId) && request.auth.uid in existing().memberUids;
+      }
+
+      // 3d. Product Aliases
+      match /productAliases/{aliasId} {
+        allow get: if isSignedIn() && isValidId(householdId) && isValidId(aliasId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(aliasId) &&
+                         incoming().householdId == householdId &&
+                         request.auth.uid in incoming().memberUids &&
+                         incoming().keys().hasAll(['householdId', 'memberUids', 'localId', 'productId', 'externalCode', 'marketName', 'createdAtMillis', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['householdId', 'memberUids', 'localId', 'productId', 'externalCode', 'marketName', 'createdAtMillis', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidProductAlias(incoming()) &&
+                         isHouseholdMember(householdId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(aliasId) &&
+                         isValidProductAlias(incoming()) &&
+                         incoming().householdId == existing().householdId &&
+                         incoming().localId == existing().localId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isHouseholdMember(householdId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']);
+
+        allow delete: if isSignedIn() && isValidId(householdId) && isValidId(aliasId) && request.auth.uid in existing().memberUids;
+      }
+
+      // 3e. Stock Movements (Audit Trail)
+      match /stockMovements/{movementId} {
+        allow get: if isSignedIn() && isValidId(householdId) && isValidId(movementId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(movementId) &&
+                         incoming().householdId == householdId &&
+                         request.auth.uid in incoming().memberUids &&
+                         incoming().keys().hasAll(['householdId', 'memberUids', 'localId', 'productId', 'productNameSnapshot', 'productUnitSnapshot', 'type', 'quantityDelta', 'previousBalance', 'newBalance', 'unitPrice', 'totalValue', 'reason', 'authorName', 'timestampMillis', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['householdId', 'memberUids', 'localId', 'productId', 'productNameSnapshot', 'productUnitSnapshot', 'type', 'quantityDelta', 'previousBalance', 'newBalance', 'unitPrice', 'totalValue', 'reason', 'authorName', 'timestampMillis', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidStockMovement(incoming()) &&
+                         isHouseholdMember(householdId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(movementId) &&
+                         isValidStockMovement(incoming()) &&
+                         incoming().householdId == existing().householdId &&
+                         incoming().localId == existing().localId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isHouseholdMember(householdId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']);
+
+        allow delete: if isSignedIn() && isValidId(householdId) && isValidId(movementId) && request.auth.uid in existing().memberUids;
+      }
+
+      // 3f. Market Checkouts
+      match /marketCheckouts/{checkoutId} {
+        allow get: if isSignedIn() && isValidId(householdId) && isValidId(checkoutId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+        allow create: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(checkoutId) &&
+                         incoming().householdId == householdId &&
+                         request.auth.uid in incoming().memberUids &&
+                         incoming().keys().hasAll(['householdId', 'memberUids', 'localId', 'storeName', 'notes', 'totalAmount', 'itemCount', 'savedToStock', 'authorName', 'timestampMillis', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['householdId', 'memberUids', 'localId', 'storeName', 'notes', 'totalAmount', 'itemCount', 'savedToStock', 'authorName', 'timestampMillis', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidMarketCheckout(incoming()) &&
+                         isHouseholdMember(householdId);
+
+        allow update: if isSignedIn() &&
+                         isValidId(householdId) &&
+                         isValidId(checkoutId) &&
+                         isValidMarketCheckout(incoming()) &&
+                         incoming().householdId == existing().householdId &&
+                         incoming().localId == existing().localId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isHouseholdMember(householdId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']);
+
+        allow delete: if isSignedIn() && isValidId(householdId) && isValidId(checkoutId) && request.auth.uid in existing().memberUids;
+      }
+    }
+  }
+}

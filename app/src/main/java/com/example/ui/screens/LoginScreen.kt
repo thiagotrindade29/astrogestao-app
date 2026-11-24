@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.util.Patterns
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,87 +16,78 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.FamilyRestroom
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.credentials.CredentialManager
 import com.example.R
+import com.example.data.remote.attemptAutoSignIn
+import com.example.data.remote.onGoogleSignInClicked
 import com.example.ui.components.AstroBrandLogo
 
 @Composable
 fun LoginScreen(
-    defaultEmail: String,
-    hasRegisteredUsers: Boolean,
-    onSignIn: (email: String, password: String, onError: (String) -> Unit) -> Unit,
-    onSignUp: (name: String, email: String, password: String, role: String, onError: (String) -> Unit) -> Unit,
+    onAuthSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isSignUpMode by remember(hasRegisteredUsers) { mutableStateOf(!hasRegisteredUsers) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val credentialManager = remember(context) { CredentialManager.create(context) }
 
-    // Shared / Login state
-    var email by remember(defaultEmail) { mutableStateOf(defaultEmail) }
-    var password by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-
-    // Sign-Up state
-    var fullName by remember { mutableStateOf("") }
-    var signUpEmail by remember { mutableStateOf("") }
-    var signUpPassword by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var selectedRole by remember(hasRegisteredUsers) {
-        mutableStateOf(if (hasRegisteredUsers) "Morador" else "Administrador")
-    }
-    var showSignUpPassword by remember { mutableStateOf(false) }
-
+    var isCheckingSilentAuth by remember { mutableStateOf(true) }
+    var isSigningIn by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val invalidCredentialsMsg = stringResource(R.string.error_invalid_credentials)
-    val requiredMsg = stringResource(R.string.error_required)
-    val passwordShortMsg = stringResource(R.string.error_password_short)
-    val passwordMismatchMsg = stringResource(R.string.error_password_mismatch)
-
-    if (isSignUpMode) {
-        BackHandler {
-            isSignUpMode = false
-            errorMessage = null
-        }
+    LaunchedEffect(Unit) {
+        attemptAutoSignIn(
+            context = context,
+            credentialManager = credentialManager,
+            onAuthSuccess = {
+                isCheckingSilentAuth = false
+                onAuthSuccess()
+            },
+            onUnauthenticated = {
+                isCheckingSilentAuth = false
+            },
+            scope = scope
+        )
     }
 
     Box(
@@ -129,83 +118,33 @@ fun LoginScreen(
                 border = BorderStroke(1.dp, Color(0xFF283058)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
-                val formContent: @Composable (Modifier) -> Unit = { formMod ->
-                    if (!isSignUpMode) {
-                        LoginFormPanel(
-                            email = email,
-                            onEmailChange = {
-                                email = it
-                                errorMessage = null
-                            },
-                            password = password,
-                            onPasswordChange = {
-                                password = it
-                                errorMessage = null
-                            },
-                            showPassword = showPassword,
-                            onTogglePassword = { showPassword = !showPassword },
-                            errorMessage = errorMessage,
-                            onSubmit = {
-                                val trimmedEmail = email.trim()
-                                if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches() || password.length < 4) {
-                                    errorMessage = invalidCredentialsMsg
-                                } else {
-                                    onSignIn(trimmedEmail, password) { err -> errorMessage = err }
+                val formPanel: @Composable (Modifier) -> Unit = { formMod ->
+                    GoogleAuthPanel(
+                        isCheckingSilentAuth = isCheckingSilentAuth,
+                        isSigningIn = isSigningIn,
+                        errorMessage = errorMessage,
+                        onGoogleClick = {
+                            errorMessage = null
+                            isSigningIn = true
+                            onGoogleSignInClicked(
+                                context = context,
+                                credentialManager = credentialManager,
+                                onAuthSuccess = {
+                                    isSigningIn = false
+                                    onAuthSuccess()
+                                },
+                                onAuthError = { msg ->
+                                    isSigningIn = false
+                                    errorMessage = msg
+                                },
+                                scope = scope,
+                                onAuthCancelled = {
+                                    isSigningIn = false
                                 }
-                            },
-                            onSwitchToSignUp = {
-                                errorMessage = null
-                                isSignUpMode = true
-                            },
-                            modifier = formMod
-                        )
-                    } else {
-                        SignUpFormPanel(
-                            fullName = fullName,
-                            onFullNameChange = {
-                                fullName = it
-                                errorMessage = null
-                            },
-                            email = signUpEmail,
-                            onEmailChange = {
-                                signUpEmail = it
-                                errorMessage = null
-                            },
-                            password = signUpPassword,
-                            onPasswordChange = {
-                                signUpPassword = it
-                                errorMessage = null
-                            },
-                            confirmPassword = confirmPassword,
-                            onConfirmPasswordChange = {
-                                confirmPassword = it
-                                errorMessage = null
-                            },
-                            selectedRole = selectedRole,
-                            onSelectRole = { selectedRole = it },
-                            showPassword = showSignUpPassword,
-                            onTogglePassword = { showSignUpPassword = !showSignUpPassword },
-                            errorMessage = errorMessage,
-                            onSubmit = {
-                                val trimmedName = fullName.trim()
-                                val trimmedEmail = signUpEmail.trim()
-                                when {
-                                    trimmedName.length < 2 -> errorMessage = requiredMsg
-                                    !Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches() -> errorMessage = invalidCredentialsMsg
-                                    signUpPassword.length < 6 -> errorMessage = passwordShortMsg
-                                    signUpPassword != confirmPassword -> errorMessage = passwordMismatchMsg
-                                    else -> onSignUp(trimmedName, trimmedEmail, signUpPassword, selectedRole) { err ->
-                                        errorMessage = err
-                                    }
-                                }
-                            },
-                            onSwitchToLogin = {
-                                errorMessage = null
-                                isSignUpMode = false
-                            },
-                            modifier = formMod
-                        )
-                    }
+                            )
+                        },
+                        modifier = formMod
+                    )
                 }
 
                 if (isWide) {
@@ -213,14 +152,18 @@ fun LoginScreen(
                         CosmicPromoPanel(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(if (isSignUpMode) 600.dp else 490.dp)
+                                .height(480.dp)
                         )
-                        formContent(Modifier.weight(1f))
+                        formPanel(Modifier.weight(1f))
                     }
                 } else {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        CosmicPromoPanel(modifier = Modifier.fillMaxWidth().height(215.dp))
-                        formContent(Modifier.fillMaxWidth())
+                        CosmicPromoPanel(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(225.dp)
+                        )
+                        formPanel(Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -292,31 +235,16 @@ private fun CosmicPromoPanel(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun authInputColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = Color(0xFFF1F5F9),
-    unfocusedContainerColor = Color(0xFFF1F5F9),
-    focusedTextColor = Color(0xFF0F172A),
-    unfocusedTextColor = Color(0xFF0F172A),
-    focusedLabelColor = Color(0xFFA5B4FC),
-    unfocusedLabelColor = Color(0xFF94A3B8)
-)
-
-@Composable
-private fun LoginFormPanel(
-    email: String,
-    onEmailChange: (String) -> Unit,
-    password: String,
-    onPasswordChange: (String) -> Unit,
-    showPassword: Boolean,
-    onTogglePassword: () -> Unit,
+private fun GoogleAuthPanel(
+    isCheckingSilentAuth: Boolean,
+    isSigningIn: Boolean,
     errorMessage: String?,
-    onSubmit: () -> Unit,
-    onSwitchToSignUp: () -> Unit,
+    onGoogleClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier.padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
             text = stringResource(R.string.login_welcome_tag),
@@ -335,86 +263,90 @@ private fun LoginFormPanel(
             color = Color(0xFF94A3B8)
         )
 
-        OutlinedTextField(
-            value = email,
-            onValueChange = onEmailChange,
-            label = { Text(stringResource(R.string.label_email)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = authInputColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("login_email_input")
-        )
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = onPasswordChange,
-            label = { Text(stringResource(R.string.label_password)) },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = onTogglePassword) {
-                    Icon(
-                        imageVector = if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = if (showPassword) "Ocultar senha" else "Mostrar senha",
-                        tint = Color(0xFF475569)
-                    )
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = authInputColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("login_password_input")
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CloudFeatureBullet(
+                icon = Icons.Rounded.CloudDone,
+                title = "Backup automático em tempo real",
+                subtitle = "Troque de celular ou acesse de outro aparelho sem perder nada."
+            )
+            CloudFeatureBullet(
+                icon = Icons.Rounded.Lock,
+                title = "Espaço privado por usuário",
+                subtitle = "Cada conta Google inicia com seu próprio inventário isolado."
+            )
+            CloudFeatureBullet(
+                icon = Icons.Rounded.FamilyRestroom,
+                title = "Compartilhe com a família",
+                subtitle = "Use um código de convite para gerenciar a mesma casa em equipe."
+            )
+        }
 
         if (errorMessage != null) {
-            Text(
-                text = errorMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFFB7185)
-            )
+            Surface(
+                color = Color(0x33FB7185),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0x66FB7185))
+            ) {
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFFDA4AF),
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Button(
-            onClick = onSubmit,
+            onClick = onGoogleClick,
+            enabled = !isSigningIn && !isCheckingSilentAuth,
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.White,
+                contentColor = Color(0xFF0F172A),
+                disabledContainerColor = Color(0xFFE2E8F0),
+                disabledContentColor = Color(0xFF475569)
+            ),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(Color(0xFF6366F1), Color(0xFF3B82F6))
-                    )
+                .height(54.dp)
+                .testTag("google_signin_button")
+        ) {
+            if (isSigningIn || isCheckingSilentAuth) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color(0xFF4F46E5),
+                    strokeWidth = 2.5.dp
                 )
-                .testTag("login_submit_button"),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-            contentPadding = PaddingValues(0.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.action_sign_in),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        TextButton(
-            onClick = onSwitchToSignUp,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .testTag("go_to_signup_button")
-        ) {
-            Text(
-                text = stringResource(R.string.action_go_to_signup),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFA5B4FC),
-                fontWeight = FontWeight.SemiBold
-            )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = if (isCheckingSilentAuth) "Verificando sessão..." else "Conectando com Google...",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .background(Color(0xFFEEF2FF), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "G",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF4F46E5)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.action_sign_in_google),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Text(
@@ -426,175 +358,34 @@ private fun LoginFormPanel(
 }
 
 @Composable
-private fun SignUpFormPanel(
-    fullName: String,
-    onFullNameChange: (String) -> Unit,
-    email: String,
-    onEmailChange: (String) -> Unit,
-    password: String,
-    onPasswordChange: (String) -> Unit,
-    confirmPassword: String,
-    onConfirmPasswordChange: (String) -> Unit,
-    selectedRole: String,
-    onSelectRole: (String) -> Unit,
-    showPassword: Boolean,
-    onTogglePassword: () -> Unit,
-    errorMessage: String?,
-    onSubmit: () -> Unit,
-    onSwitchToLogin: () -> Unit,
-    modifier: Modifier = Modifier
+private fun CloudFeatureBullet(
+    icon: ImageVector,
+    title: String,
+    subtitle: String
 ) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = stringResource(R.string.signup_tag),
-            style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF818CF8)
-        )
-        Text(
-            text = stringResource(R.string.signup_title),
-            style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = stringResource(R.string.signup_subtitle),
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF94A3B8)
-        )
-
-        OutlinedTextField(
-            value = fullName,
-            onValueChange = onFullNameChange,
-            label = { Text(stringResource(R.string.label_full_name)) },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = authInputColors(),
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color(0xFF818CF8),
             modifier = Modifier
-                .fillMaxWidth()
-                .testTag("signup_name_input")
+                .padding(top = 2.dp)
+                .size(18.dp)
         )
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = onEmailChange,
-            label = { Text(stringResource(R.string.label_email)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = authInputColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("signup_email_input")
-        )
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column {
             Text(
-                text = "Perfil:",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFFCBD5E1)
-            )
-            listOf("Morador", "Administrador").forEach { role ->
-                val isSelected = selectedRole == role
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onSelectRole(role) },
-                    label = { Text(role) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = Color(0xFF1E293B),
-                        labelColor = Color(0xFFCBD5E1),
-                        selectedContainerColor = Color(0xFF6366F1),
-                        selectedLabelColor = Color.White
-                    ),
-                    modifier = Modifier.testTag("signup_role_${role.lowercase()}")
-                )
-            }
-        }
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = onPasswordChange,
-            label = { Text(stringResource(R.string.label_password)) },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = onTogglePassword) {
-                    Icon(
-                        imageVector = if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = if (showPassword) "Ocultar senha" else "Mostrar senha",
-                        tint = Color(0xFF475569)
-                    )
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = authInputColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("signup_password_input")
-        )
-
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = onConfirmPasswordChange,
-            label = { Text(stringResource(R.string.label_confirm_password)) },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = authInputColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("signup_confirm_password_input")
-        )
-
-        if (errorMessage != null) {
-            Text(
-                text = errorMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFFB7185)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Button(
-            onClick = onSubmit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(Color(0xFF6366F1), Color(0xFF3B82F6))
-                    )
-                )
-                .testTag("signup_submit_button"),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-            contentPadding = PaddingValues(0.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.action_create_account),
-                style = MaterialTheme.typography.titleMedium,
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
                 color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        TextButton(
-            onClick = onSwitchToLogin,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .testTag("back_to_login_button")
-        ) {
-            Text(
-                text = stringResource(R.string.action_back_to_login),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFA5B4FC),
                 fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF94A3B8)
             )
         }
     }

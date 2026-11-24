@@ -1,7 +1,11 @@
 package com.example.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -23,16 +27,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FamilyRestroom
+import androidx.compose.material.icons.rounded.GroupAdd
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.HomeWork
 import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,10 +54,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -91,6 +105,11 @@ fun MoreScreen(
     onDeleteCategory: (CategoryEntity) -> Unit,
     onNewUser: () -> Unit,
     onDeleteUser: (HouseholdUserEntity) -> Unit,
+    onRenameHousehold: (String) -> Unit,
+    onRegenerateInviteCode: () -> Unit,
+    onJoinHousehold: (String) -> Unit,
+    onCreatePersonalHousehold: (String) -> Unit,
+    onMigrateLocalToCloud: () -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
     onLoadSampleCatalog: () -> Unit,
     onExportBackup: (Uri) -> Unit,
@@ -103,6 +122,9 @@ fun MoreScreen(
     var pendingDeleteCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     var showSampleOverwriteConfirm by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    var showJoinHouseholdDialog by remember { mutableStateOf(false) }
+    var showRenameHouseholdDialog by remember { mutableStateOf(false) }
+    var showCreateHouseholdDialog by remember { mutableStateOf(false) }
 
     pendingDeleteCategory?.let { cat ->
         ConfirmationDialog(
@@ -139,6 +161,42 @@ fun MoreScreen(
                 onRestoreBackup(uri)
             },
             onDismiss = { pendingRestoreUri = null }
+        )
+    }
+
+    if (showJoinHouseholdDialog) {
+        JoinHouseholdDialog(
+            onJoin = { code ->
+                showJoinHouseholdDialog = false
+                onJoinHousehold(code)
+            },
+            onDismiss = { showJoinHouseholdDialog = false }
+        )
+    }
+
+    if (showRenameHouseholdDialog) {
+        HouseholdNameDialog(
+            title = "Renomear Espaço",
+            initialName = uiState.householdName,
+            confirmLabel = stringResource(R.string.action_save),
+            onConfirm = { newName ->
+                showRenameHouseholdDialog = false
+                onRenameHousehold(newName)
+            },
+            onDismiss = { showRenameHouseholdDialog = false }
+        )
+    }
+
+    if (showCreateHouseholdDialog) {
+        HouseholdNameDialog(
+            title = "Criar Nova Casa Individual",
+            initialName = "Casa de ${uiState.userName.substringBefore(" ").ifBlank { "Mim" }}",
+            confirmLabel = "Criar Espaço",
+            onConfirm = { newName ->
+                showCreateHouseholdDialog = false
+                onCreatePersonalHousehold(newName)
+            },
+            onDismiss = { showCreateHouseholdDialog = false }
         )
     }
 
@@ -192,6 +250,11 @@ fun MoreScreen(
                 uiState = uiState,
                 onNewUser = onNewUser,
                 onDeleteUser = onDeleteUser,
+                onOpenRenameHousehold = { showRenameHouseholdDialog = true },
+                onRegenerateInviteCode = onRegenerateInviteCode,
+                onOpenJoinHousehold = { showJoinHouseholdDialog = true },
+                onOpenCreatePersonalHousehold = { showCreateHouseholdDialog = true },
+                onMigrateLocalToCloud = onMigrateLocalToCloud,
                 onToggleDarkMode = onToggleDarkMode,
                 onRequestSampleCatalog = {
                     if (uiState.products.isNotEmpty() || uiState.movements.isNotEmpty()) {
@@ -435,6 +498,11 @@ private fun UsersAndSettingsTab(
     uiState: AstroUiState,
     onNewUser: () -> Unit,
     onDeleteUser: (HouseholdUserEntity) -> Unit,
+    onOpenRenameHousehold: () -> Unit,
+    onRegenerateInviteCode: () -> Unit,
+    onOpenJoinHousehold: () -> Unit,
+    onOpenCreatePersonalHousehold: () -> Unit,
+    onMigrateLocalToCloud: () -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
     onRequestSampleCatalog: () -> Unit,
     onExportBackup: (Uri) -> Unit,
@@ -462,6 +530,54 @@ private fun UsersAndSettingsTab(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (uiState.hasLocalMigrationAvailable) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.CloudUpload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Dados locais encontrados neste aparelho",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Encontramos produtos cadastrados antes da atualização na nuvem. Deseja enviá-los para este espaço sincronizado?",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = onMigrateLocalToCloud,
+                            enabled = !uiState.isSyncingWorkspace,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("migrate_local_cloud_button")
+                        ) {
+                            Text("Enviar Dados Locais para a Nuvem")
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -480,7 +596,7 @@ private fun UsersAndSettingsTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = uiState.userName.ifBlank { "Conta local" },
+                                text = uiState.userName.ifBlank { "Conta Google" },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -527,6 +643,156 @@ private fun UsersAndSettingsTab(
                             .testTag("load_sample_catalog_button")
                     ) {
                         Text(stringResource(R.string.action_load_sample_catalog))
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, extended.borderSubtle)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Rounded.FamilyRestroom,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column {
+                                Text(
+                                    text = uiState.householdName.ifBlank { "Meu Espaço na Nuvem" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${uiState.memberCount} conta(s) conectada(s) neste banco",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = onOpenRenameHousehold,
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Renomear casa")
+                        }
+                    }
+
+                    if (uiState.householdInviteCode.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            border = BorderStroke(1.dp, extended.borderSubtle),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Código de Convite da Família",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = uiState.householdInviteCode,
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontFamily = JetBrainsMonoFamily),
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Row {
+                                        IconButton(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                clipboard.setPrimaryClip(
+                                                    ClipData.newPlainText("Código AstroGestão", uiState.householdInviteCode)
+                                                )
+                                                Toast.makeText(context, "Código copiado!", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Icon(Icons.Rounded.ContentCopy, contentDescription = "Copiar código")
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(
+                                                        Intent.EXTRA_TEXT,
+                                                        "Entre na nossa casa \"${uiState.householdName}\" no AstroGestão usando o código: ${uiState.householdInviteCode}"
+                                                    )
+                                                }
+                                                context.startActivity(Intent.createChooser(shareIntent, "Convidar família"))
+                                            }
+                                        ) {
+                                            Icon(Icons.Rounded.Share, contentDescription = "Compartilhar código")
+                                        }
+                                        if (uiState.isHouseholdOwner) {
+                                            IconButton(
+                                                onClick = onRegenerateInviteCode,
+                                                enabled = !uiState.isSyncingWorkspace
+                                            ) {
+                                                Icon(Icons.Rounded.Refresh, contentDescription = "Gerar novo código")
+                                            }
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = "Envie este código para um familiar entrar com a conta Google dele e gerenciar o mesmo estoque e finanças.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onOpenJoinHousehold,
+                            enabled = !uiState.isSyncingWorkspace,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("join_household_button")
+                        ) {
+                            Icon(Icons.Rounded.GroupAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Entrar por Código", maxLines = 1, softWrap = false)
+                        }
+                        OutlinedButton(
+                            onClick = onOpenCreatePersonalHousehold,
+                            enabled = !uiState.isSyncingWorkspace,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("new_household_button")
+                        ) {
+                            Icon(Icons.Rounded.HomeWork, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Nova Casa", maxLines = 1, softWrap = false)
+                        }
                     }
                 }
             }
@@ -655,12 +921,15 @@ private fun UsersAndSettingsTab(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(user.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Text(
-                            text = "${user.email} • ${user.role}",
+                            text = listOfNotNull(
+                                user.email.takeIf { it.isNotBlank() },
+                                user.role
+                            ).joinToString(" • "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    if (uiState.users.size > 1) {
+                    if (uiState.users.size > 1 && user.email != uiState.userEmail) {
                         IconButton(onClick = { onDeleteUser(user) }) {
                             Icon(
                                 Icons.Rounded.DeleteOutline,
