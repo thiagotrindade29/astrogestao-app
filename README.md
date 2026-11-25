@@ -4,7 +4,7 @@ Aplicativo Android em Kotlin e Jetpack Compose para controle de estoque domésti
 
 ## Funcionalidades
 
-- **Acesso & Cadastro de Usuários**: Tela cósmica inspirada no design Figma do AstroGestão com login (`Entrar`) e criação de novas contas (`Cadastre-se`), escolha de perfil (`Morador` / `Administrador`), hash SHA-256 de senha no Room e sessão persistida via Jetpack DataStore.
+- **Acesso & Segurança na Nuvem**: Tela cósmica com login por **E-mail e Senha** (`Entrar`, `Criar Conta` e recuperação de senha) e **Google Sign-In** via Firebase Authentication, abertura sempre na tela de login e desconexão automática após 1 hora de inatividade. Dados sincronizados em tempo real no Cloud Firestore com suporte a espaço individual ou compartilhado em família.
 - **Dashboard Integrado (Visão Geral do Estoque)**:
   - KPIs em tempo real: Total de Produtos, Valor Estimado Total (`R$`), Itens em Reposição e Alertas de Vencimento Próximo (30 dias).
   - Lista automática de **Compras / Reposição** para itens com saldo igual ou abaixo do mínimo configurado, com ação rápida `+ Repor`.

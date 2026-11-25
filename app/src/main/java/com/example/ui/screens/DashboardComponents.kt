@@ -63,11 +63,30 @@ internal fun RestockListCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.section_restock_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.section_restock_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (lowStock.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = extended.warningContainer
+                            ) {
+                                Text(
+                                    text = "${lowStock.size}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = extended.warning,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                     Text(
                         text = stringResource(R.string.section_restock_subtitle),
                         style = MaterialTheme.typography.bodySmall,
@@ -164,6 +183,7 @@ internal fun RestockListCard(
 @Composable
 internal fun ExpiringSoonCard(
     uiState: AstroUiState,
+    onSeeCatalog: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val extended = AstroTheme.extended
@@ -181,17 +201,48 @@ internal fun ExpiringSoonCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column {
-                Text(
-                    text = stringResource(R.string.section_expiring_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.section_expiring_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.section_expiring_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (expiring.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = extended.negativeContainer
+                            ) {
+                                Text(
+                                    text = "${expiring.size}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = extended.negative,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.section_expiring_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    onClick = onSeeCatalog,
+                    modifier = Modifier.testTag("expiring_see_catalog_button")
+                ) {
+                    Text(stringResource(R.string.action_view_catalog))
+                }
             }
 
             if (expiring.isEmpty()) {
@@ -252,10 +303,12 @@ internal fun ExpiringSoonCard(
                                     Text(
                                         text = product.name,
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "Validade: ${formatShortDateBr(expiryMillis)}",
+                                        text = "Validade: ${formatShortDateBr(expiryMillis)} • Qtd: ${formatQty(product.quantity)} ${product.unit}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

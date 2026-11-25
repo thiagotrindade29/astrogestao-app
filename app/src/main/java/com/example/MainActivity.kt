@@ -7,12 +7,24 @@ import androidx.activity.enableEdgeToEdge
 import com.example.ui.AstroGestaoApp
 
 class MainActivity : ComponentActivity() {
+    private lateinit var astroApp: AstroGestaoApplication
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val app = application as AstroGestaoApplication
+        astroApp = application as AstroGestaoApplication
+        if (savedInstanceState == null) {
+            astroApp.resetSessionForFreshLaunch()
+        }
         setContent {
-            AstroGestaoApp(app = app)
+            AstroGestaoApp(app = astroApp)
+        }
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        if (::astroApp.isInitialized) {
+            astroApp.recordUserActivity()
         }
     }
 }

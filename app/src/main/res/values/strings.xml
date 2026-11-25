@@ -6,13 +6,22 @@
     <!-- Login -->
     <string name="login_eyebrow">NUVEM &amp; FAMÍLIA SINCRONIZADOS</string>
     <string name="login_headline">Seu estoque em qualquer celular.\nCompartilhado com sua família.</string>
-    <string name="login_subheadline">Salve produtos, cupons e gastos com segurança na nuvem usando sua conta Google.</string>
+    <string name="login_subheadline">Acesse com sua conta Google ou com e-mail e senha para sincronizar seus produtos, cupons e finanças na nuvem.</string>
     <string name="login_welcome_tag">ACESSO SEGURO NA NUVEM</string>
-    <string name="login_title">Entre com sua conta Google</string>
-    <string name="login_subtitle">Cada conta cria seu espaço isolado automaticamente. Depois, compartilhe o código com sua família se quiser gerenciar juntos.</string>
+    <string name="login_title">Acesse sua conta</string>
+    <string name="login_subtitle">Entre com e-mail e senha ou sua conta Google. Cada usuário tem seu espaço isolado e pode compartilhar com a família via código.</string>
     <string name="action_sign_in_google">Entrar com Google</string>
+    <string name="action_sign_in_email">Entrar com E-mail</string>
+    <string name="action_create_account">Criar Conta</string>
+    <string name="action_forgot_password">Esqueci minha senha</string>
     <string name="label_email">E-mail</string>
-    <string name="login_footer_note">Seus dados acompanham você ao trocar de celular ou entrar em outro aparelho.</string>
+    <string name="label_password">Senha</string>
+    <string name="label_confirm_password">Confirmar senha</string>
+    <string name="login_tab_sign_in">Entrar</string>
+    <string name="login_tab_sign_up">Criar Conta</string>
+    <string name="login_divider_or">ou</string>
+    <string name="login_footer_note">Por segurança, o acesso inicia nesta tela e encerra após 1 hora sem atividade.</string>
+    <string name="session_expired_inactivity">Sessão encerrada após 1 hora de inatividade. Entre novamente para continuar.</string>
 
     <!-- Navegação -->
     <string name="nav_home">Início</string>
@@ -23,7 +32,8 @@
 
     <!-- Visão Geral / Dashboard -->
     <string name="dashboard_title">Visão Geral do Estoque</string>
-    <string name="dashboard_subtitle">Resumo em tempo real dos itens da casa, alertas de compra e últimas movimentações.</string>
+    <string name="dashboard_subtitle">Resumo em tempo real dos itens da casa, alertas de reposição e vencimento próximo via Firestore.</string>
+    <string name="dashboard_cloud_synced">Sincronizado com Firestore</string>
     <string name="action_view_catalog">Ver Catálogo</string>
     <string name="action_new_product">+ Novo Produto</string>
     <string name="action_import_nfce">Importar Cupom / NF-e</string>

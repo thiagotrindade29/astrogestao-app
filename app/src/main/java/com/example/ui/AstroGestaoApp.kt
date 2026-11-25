@@ -52,6 +52,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -69,7 +70,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -101,6 +106,9 @@ import com.example.ui.theme.AstroTheme
 import com.example.ui.viewmodel.AstroViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 object AstroRoutes {
     const val ROUTE_HOME = "home"
@@ -170,13 +178,34 @@ private sealed interface ActiveDialog {
 fun AstroGestaoApp(app: AstroGestaoApplication) {
     val auth = Firebase.auth
     val firebaseUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+    val isSessionUnlocked by app.isSessionUnlocked.collectAsStateWithLifecycle()
+    val sessionNotice by app.sessionNotice.collectAsStateWithLifecycle()
     val isDarkMode by app.preferencesRepository.isDarkMode.collectAsStateWithLifecycle(initialValue = false)
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val credentialManager = remember(context) { CredentialManager.create(context) }
+
+    // Sempre iniciar na tela de login ao abrir o aplicativo:
+    // limpa qualquer sessão persistida antes que listeners do Firestore sejam ativados.
+    LaunchedEffect(isSessionUnlocked) {
+        if (!isSessionUnlocked && auth.currentUser != null) {
+            withContext(NonCancellable) {
+                runCatching { credentialManager.clearCredentialState(ClearCredentialStateRequest()) }
+                auth.signOut()
+            }
+        }
+    }
 
     AstroGestaoTheme(darkTheme = isDarkMode) {
         val currentUser = firebaseUser
-        if (currentUser == null) {
+        if (currentUser == null || !isSessionUnlocked) {
             LoginScreen(
-                onAuthSuccess = { /* authStateFlow updates automatically */ }
+                onAuthSuccess = {
+                    app.unlockSession()
+                },
+                sessionNotice = sessionNotice,
+                onDismissNotice = app::clearSessionNotice
             )
         } else {
             val uid = currentUser.uid
@@ -197,28 +226,62 @@ fun AstroGestaoApp(app: AstroGestaoApplication) {
                         userName = displayName
                     )
                 )
-                AuthenticatedAstroContent(viewModel = viewModel)
+                AuthenticatedAstroContent(
+                    app = app,
+                    viewModel = viewModel,
+                    onSignOut = { notice ->
+                        app.lockSession(notice = notice)
+                        performGoogleSignOut(
+                            credentialManager = credentialManager,
+                            scope = scope
+                        )
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AuthenticatedAstroContent(viewModel: AstroViewModel) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val credentialManager = remember(context) { CredentialManager.create(context) }
-
+private fun AuthenticatedAstroContent(
+    app: AstroGestaoApplication,
+    viewModel: AstroViewModel,
+    onSignOut: (notice: String?) -> Unit
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val nfceState by viewModel.nfceState.collectAsStateWithLifecycle()
     val posState by viewModel.posState.collectAsStateWithLifecycle()
 
-    val onGoogleSignOut: () -> Unit = {
-        performGoogleSignOut(
-            credentialManager = credentialManager,
-            scope = scope
-        )
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val timeoutNotice = stringResource(R.string.session_expired_inactivity)
+
+    LaunchedEffect(viewModel) {
+        while (true) {
+            delay(15_000L)
+            if (app.isSessionTimedOut()) {
+                onSignOut(timeoutNotice)
+                break
+            }
+        }
     }
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (app.isSessionTimedOut()) {
+                    onSignOut(timeoutNotice)
+                } else {
+                    app.recordUserActivity()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val onUserSignOut: () -> Unit = { onSignOut(null) }
 
     if (uiState.cloudErrorMessage != null && uiState.householdId.isBlank()) {
         Box(
@@ -255,7 +318,7 @@ private fun AuthenticatedAstroContent(viewModel: AstroViewModel) {
                     Button(onClick = viewModel::initializeCloudWorkspace) {
                         Text("Tentar Novamente")
                     }
-                    OutlinedButton(onClick = onGoogleSignOut) {
+                    OutlinedButton(onClick = onUserSignOut) {
                         Text(stringResource(R.string.action_logout))
                     }
                 }
@@ -646,7 +709,7 @@ private fun AuthenticatedAstroContent(viewModel: AstroViewModel) {
                                 onExportBackup = { uri -> viewModel.exportBackupToUri(appContext, uri) },
                                 onRestoreBackup = { uri -> viewModel.importBackupFromUri(appContext, uri) },
                                 onBuildDiagnosticReport = viewModel::buildDiagnosticReport,
-                                onSignOut = onGoogleSignOut
+                                onSignOut = onUserSignOut
                             )
                         }
 

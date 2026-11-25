@@ -596,7 +596,7 @@ private fun UsersAndSettingsTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = uiState.userName.ifBlank { "Conta Google" },
+                                text = uiState.userName.ifBlank { "Usuário AstroGestão" },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )

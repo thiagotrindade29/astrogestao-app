@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material3.Button
@@ -141,7 +142,7 @@ fun DashboardScreen(
                                 shape = MaterialTheme.shapes.small,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(46.dp)
+                                    .height(48.dp)
                                     .testTag("dashboard_view_catalog_button")
                             ) {
                                 Text(stringResource(R.string.action_view_catalog))
@@ -151,7 +152,7 @@ fun DashboardScreen(
                                 shape = MaterialTheme.shapes.small,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(46.dp)
+                                    .height(48.dp)
                                     .testTag("dashboard_new_product_button")
                             ) {
                                 Text(stringResource(R.string.action_new_product))
@@ -163,13 +164,69 @@ fun DashboardScreen(
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(46.dp)
+                                .height(48.dp)
                                 .testTag("dashboard_import_nfce_button")
                         ) {
                             Icon(Icons.Rounded.ReceiptLong, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.action_import_nfce))
                         }
+                    }
+                }
+            }
+        }
+
+        // Firestore live sync & active household status bar
+        item {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, extended.borderSubtle),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("dashboard_cloud_status_bar")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CloudDone,
+                            contentDescription = stringResource(R.string.dashboard_cloud_synced),
+                            tint = extended.positive,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = buildString {
+                                append(uiState.householdName.ifBlank { "Meu Espaço" })
+                                append(" • ")
+                                append(stringResource(R.string.dashboard_cloud_synced))
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Surface(
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = extended.positiveContainer
+                    ) {
+                        Text(
+                            text = "${uiState.memberCount} membro(s)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = extended.positive,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
                     }
                 }
             }
@@ -297,6 +354,7 @@ fun DashboardScreen(
                         )
                         ExpiringSoonCard(
                             uiState = uiState,
+                            onSeeCatalog = onOpenCatalog,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -310,6 +368,7 @@ fun DashboardScreen(
                         )
                         ExpiringSoonCard(
                             uiState = uiState,
+                            onSeeCatalog = onOpenCatalog,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
