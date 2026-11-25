@@ -71,7 +71,7 @@ class FirestoreAstroRepository(
     private fun requireUserId(): String {
         val uid = auth.currentUser?.uid
         if (uid.isNullOrBlank()) {
-            throw IllegalStateException("Você precisa entrar com sua conta Google para acessar a nuvem.")
+            throw IllegalStateException("Você precisa entrar na sua conta para acessar a nuvem.")
         }
         return uid
     }
@@ -311,22 +311,22 @@ class FirestoreAstroRepository(
         val userRef = db.collection("users").document(uid)
         val memberRef = householdRef.collection("members").document(uid)
 
-        val ops = mutableListOf<(WriteBatch) -> Unit>()
-
-        ops.add { batch ->
-            batch.set(
-                householdRef,
-                nonNullMap(
-                    "ownerUid" to uid,
-                    "name" to householdName.take(80),
-                    "inviteCode" to inviteCode,
-                    "memberUids" to listOf(uid),
-                    "nextProductSeq" to 1L,
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
+        // 1. Cria a casa primeiro para que exists()/get() nas regras do Firestore
+        // aprovem o convite, o membro administrador e as categorias na sequência.
+        householdRef.set(
+            nonNullMap(
+                "ownerUid" to uid,
+                "name" to householdName.take(80),
+                "inviteCode" to inviteCode,
+                "memberUids" to listOf(uid),
+                "nextProductSeq" to 1L,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
             )
-        }
+        ).await()
+
+        // 2. Cria convite, membro administrador e categorias padrão
+        val ops = mutableListOf<(WriteBatch) -> Unit>()
 
         ops.add { batch ->
             batch.set(
@@ -339,34 +339,6 @@ class FirestoreAstroRepository(
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             )
-        }
-
-        if (userAlreadyExists) {
-            ops.add { batch ->
-                batch.update(
-                    userRef,
-                    nonNullMap(
-                        "displayName" to displayName.take(100),
-                        "email" to email.take(160),
-                        "activeHouseholdId" to householdId,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                )
-            }
-        } else {
-            ops.add { batch ->
-                batch.set(
-                    userRef,
-                    nonNullMap(
-                        "uid" to uid,
-                        "displayName" to displayName.take(100),
-                        "email" to email.take(160),
-                        "activeHouseholdId" to householdId,
-                        "createdAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                )
-            }
         }
 
         ops.add { batch ->
@@ -408,6 +380,31 @@ class FirestoreAstroRepository(
         }
 
         commitChunkedOps(ops)
+
+        // 3. Atualiza/cria o perfil do usuário por último para que observeUserProfile
+        // dispare observeHousehold somente após a casa existir no servidor.
+        if (userAlreadyExists) {
+            userRef.update(
+                nonNullMap(
+                    "displayName" to displayName.take(100),
+                    "email" to email.take(160),
+                    "activeHouseholdId" to householdId,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } else {
+            userRef.set(
+                nonNullMap(
+                    "uid" to uid,
+                    "displayName" to displayName.take(100),
+                    "email" to email.take(160),
+                    "activeHouseholdId" to householdId,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        }
+
         return householdId
     }
 

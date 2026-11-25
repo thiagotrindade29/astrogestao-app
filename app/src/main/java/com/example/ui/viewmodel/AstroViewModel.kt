@@ -143,6 +143,14 @@ class AstroViewModel(
                         )
                     }
                 }
+                .catch { error ->
+                    val firestoreError = error.unwrapFirestoreException()
+                    if (firestoreError !is FirebaseFirestoreException && error is CancellationException) {
+                        throw error
+                    }
+                    Log.w(TAG, "Erro ao observar casa $householdId", firestoreError)
+                    emit(CloudDataState.Error(firestoreError.localizedMessage ?: "Falha ao sincronizar dados com a nuvem."))
+                }
             }
         }
         .catch { error ->

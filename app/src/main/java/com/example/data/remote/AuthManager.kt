@@ -61,11 +61,11 @@ private fun mapFirebaseAuthError(error: Exception): String {
         return when (error.errorCode) {
             "ERROR_INVALID_EMAIL" -> "Informe um endereço de e-mail válido."
             "ERROR_WRONG_PASSWORD", "ERROR_INVALID_CREDENTIAL" ->
-                "E-mail ou senha incorretos."
+                "E-mail ou senha incorretos. Se ainda não cadastrou uma senha, toque em \"Criar Conta\" ou use \"Entrar com Google\"."
             "ERROR_USER_NOT_FOUND" ->
-                "Nenhuma conta encontrada com este e-mail."
+                "Nenhuma conta encontrada com este e-mail. Toque em \"Criar Conta\" para se cadastrar."
             "ERROR_EMAIL_ALREADY_IN_USE" ->
-                "Este e-mail já está cadastrado. Tente entrar ou recuperar sua senha."
+                "Este e-mail já está cadastrado. Use \"Entrar\", \"Entrar com Google\" ou \"Esqueci minha senha\"."
             "ERROR_WEAK_PASSWORD" ->
                 "A senha precisa ter pelo menos 6 caracteres."
             "ERROR_USER_DISABLED" ->
