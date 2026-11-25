@@ -34,83 +34,142 @@ data class NfceParseResult(
 
 object NfceParser {
 
+    private const val MAX_HTTP_BODY_BYTES = 4_000_000L
+    private const val MAX_XML_CHARS = 2_000_000
+    private const val MAX_REDIRECTS = 4
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(14, TimeUnit.SECONDS)
         .readTimeout(18, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .followSslRedirects(true)
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
 
     fun fetchAndParseUrl(url: String): NfceParseResult {
         val key = SefazPortals.extractAccessKey(url)
         val detectedPortal = SefazPortals.detectForInput(url)
+        val safeInitialUrl = SefazPortals.sanitizeSefazUrl(url)
+            ?: return NfceParseResult(
+                accessKey = key,
+                detectedUfSigla = detectedPortal.ufSigla,
+                requiresWebPortal = false,
+                message = "URL bloqueada por segurança: informe apenas links oficiais HTTPS da SEFAZ (.gov.br)."
+            )
+
         return try {
-            val request = Request.Builder()
-                .url(url)
-                .header(
-                    "User-Agent",
-                    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-                )
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .header("Accept-Language", "pt-BR,pt;q=0.9")
-                .build()
+            var currentUrl = safeInitialUrl
+            var redirectCount = 0
+            var responseStatusCode = 0
+            var isSuccessful = false
+            var body = ""
 
-            client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (!response.isSuccessful || body.isBlank()) {
-                    return NfceParseResult(
-                        accessKey = key,
-                        detectedUfSigla = detectedPortal.ufSigla,
-                        requiresWebPortal = true,
-                        portalUrl = url,
-                        message = "A SEFAZ (${detectedPortal.ufSigla}) retornou código ${response.code}. Abrindo no navegador integrado com cookies ativos para consulta."
+            while (redirectCount <= MAX_REDIRECTS) {
+                val request = Request.Builder()
+                    .url(currentUrl)
+                    .header(
+                        "User-Agent",
+                        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                     )
-                }
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Accept-Language", "pt-BR,pt;q=0.9")
+                    .build()
 
-                if (body.trimStart().startsWith("<") && body.contains("<infNFe", ignoreCase = true)) {
-                    val xmlResult = parseNfceXml(body)
-                    if (xmlResult.items.isNotEmpty()) {
-                        return xmlResult.copy(detectedUfSigla = detectedPortal.ufSigla)
+                var nextRedirectUrl: String? = null
+                client.newCall(request).execute().use { response ->
+                    responseStatusCode = response.code
+                    if (response.isRedirect) {
+                        val location = response.header("Location").orEmpty()
+                        val resolved = response.request.url.resolve(location)?.toString().orEmpty()
+                        nextRedirectUrl = SefazPortals.sanitizeSefazUrl(resolved)
+                            ?: return NfceParseResult(
+                                accessKey = key,
+                                detectedUfSigla = detectedPortal.ufSigla,
+                                requiresWebPortal = false,
+                                message = "Redirecionamento bloqueado por segurança (destino fora dos domínios oficiais .gov.br)."
+                            )
+                    } else {
+                        isSuccessful = response.isSuccessful
+                        val source = response.body?.source()
+                        if (source != null) {
+                            val limitedBuffer = okio.Buffer()
+                            var totalRead = 0L
+                            while (totalRead < MAX_HTTP_BODY_BYTES) {
+                                val read = source.read(limitedBuffer, minOf(8192L, MAX_HTTP_BODY_BYTES - totalRead))
+                                if (read == -1L) break
+                                totalRead += read
+                            }
+                            body = limitedBuffer.readUtf8()
+                        }
                     }
                 }
-
-                val hasCaptcha = body.contains("g-recaptcha", ignoreCase = true) ||
-                    body.contains("hcaptcha", ignoreCase = true) ||
-                    body.contains("captcha", ignoreCase = true) ||
-                    body.contains("ConsultaPublicaNFe", ignoreCase = true)
-
-                val htmlResult = parseSefazHtml(body, key)
-                if (htmlResult.items.isNotEmpty()) {
-                    return htmlResult.copy(
-                        detectedUfSigla = detectedPortal.ufSigla,
-                        message = "${htmlResult.items.size} item(ns) extraído(s) da SEFAZ (${detectedPortal.ufSigla})!"
-                    )
+                if (nextRedirectUrl != null) {
+                    currentUrl = nextRedirectUrl!!
+                    redirectCount++
+                } else {
+                    break
                 }
+            }
 
-                NfceParseResult(
+            if (!isSuccessful || body.isBlank()) {
+                return NfceParseResult(
                     accessKey = key,
                     detectedUfSigla = detectedPortal.ufSigla,
                     requiresWebPortal = true,
-                    portalUrl = url,
-                    message = if (hasCaptcha) {
-                        "A SEFAZ (${detectedPortal.ufSigla}) exige verificação/CAPTCHA. Resolva na tela abaixo; assim que a nota abrir, os itens serão capturados automaticamente (ou toque em Extrair Itens)."
-                    } else {
-                        "Nota aberta no portal (${detectedPortal.ufSigla}). Assim que os produtos aparecerem na página, toque em \"Extrair Itens da Página\" (ou envie a foto do cupom na primeira aba)."
-                    }
+                    portalUrl = currentUrl,
+                    message = "A SEFAZ (${detectedPortal.ufSigla}) retornou código $responseStatusCode. Abrindo no navegador integrado com cookies ativos para consulta."
                 )
             }
+
+            if (body.trimStart().startsWith("<") && body.contains("<infNFe", ignoreCase = true)) {
+                val xmlResult = parseNfceXml(body)
+                if (xmlResult.items.isNotEmpty()) {
+                    return xmlResult.copy(detectedUfSigla = detectedPortal.ufSigla)
+                }
+            }
+
+            val hasCaptcha = body.contains("g-recaptcha", ignoreCase = true) ||
+                body.contains("hcaptcha", ignoreCase = true) ||
+                body.contains("captcha", ignoreCase = true) ||
+                body.contains("ConsultaPublicaNFe", ignoreCase = true)
+
+            val htmlResult = parseSefazHtml(body, key)
+            if (htmlResult.items.isNotEmpty()) {
+                return htmlResult.copy(
+                    detectedUfSigla = detectedPortal.ufSigla,
+                    message = "${htmlResult.items.size} item(ns) extraído(s) da SEFAZ (${detectedPortal.ufSigla})!"
+                )
+            }
+
+            NfceParseResult(
+                accessKey = key,
+                detectedUfSigla = detectedPortal.ufSigla,
+                requiresWebPortal = true,
+                portalUrl = currentUrl,
+                message = if (hasCaptcha) {
+                    "A SEFAZ (${detectedPortal.ufSigla}) exige verificação/CAPTCHA. Resolva na tela abaixo; assim que a nota abrir, os itens serão capturados automaticamente (ou toque em Extrair Itens)."
+                } else {
+                    "Nota aberta no portal (${detectedPortal.ufSigla}). Assim que os produtos aparecerem na página, toque em \"Extrair Itens da Página\" (ou envie a foto do cupom na primeira aba)."
+                }
+            )
         } catch (e: Exception) {
             NfceParseResult(
                 accessKey = key,
                 detectedUfSigla = detectedPortal.ufSigla,
                 requiresWebPortal = true,
-                portalUrl = url,
+                portalUrl = safeInitialUrl,
                 message = "Não foi possível consultar direto (${e.localizedMessage ?: "rede"}). Abrindo o link no portal integrado (${detectedPortal.ufSigla})."
             )
         }
     }
 
     fun parseNfceXml(xmlContent: String): NfceParseResult {
+        if (xmlContent.length > MAX_XML_CHARS) {
+            return NfceParseResult(message = "Arquivo XML excede o limite de tamanho permitido.")
+        }
+        if (xmlContent.contains("<!DOCTYPE", ignoreCase = true) || xmlContent.contains("<!ENTITY", ignoreCase = true)) {
+            return NfceParseResult(message = "Arquivo XML rejeitado por conter declarações DOCTYPE/ENTITY não suportadas.")
+        }
+
         val items = mutableListOf<ParsedNfceItem>()
         var storeName: String? = null
         var accessKey: String? = null

@@ -29,16 +29,19 @@ fun handleFirestoreError(
 
     val currentUser = runCatching { Firebase.auth.currentUser }.getOrNull()
 
+    val isDebug = com.example.BuildConfig.DEBUG
+    val safeEmail = if (isDebug) currentUser?.email else currentUser?.email?.let { "***" }
+
     val providerInfoList = currentUser?.providerData?.map { provider ->
         JSONObject().apply {
             put("providerId", provider.providerId)
-            put("email", provider.email)
+            put("email", if (isDebug) provider.email else provider.email?.let { "***" })
         }
     } ?: emptyList()
 
     val authInfoJson = JSONObject().apply {
         put("userId", currentUser?.uid)
-        put("email", currentUser?.email)
+        put("email", safeEmail)
         put("emailVerified", currentUser?.isEmailVerified)
         put("tenantId", currentUser?.tenantId)
         put("providerInfo", JSONArray(providerInfoList))

@@ -1871,6 +1871,9 @@ class FirestoreAstroRepository(
         val hhRef = db.collection("households").document(household.docId)
         return try {
             val uid = requireUserId()
+            require(rawJson.length <= 5_000_000) {
+                "Arquivo de backup excede o tamanho máximo suportado (5 MB)."
+            }
             val root = JSONObject(rawJson)
             require(root.optString("app") == "AstroGestao") {
                 "Arquivo inválido: este JSON não é um backup do AstroGestão."

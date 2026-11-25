@@ -44,6 +44,72 @@ object SefazPortals {
         RegionalPortal("17", "TO", "Tocantins (TO)", "https://www.sefaz.to.gov.br/nfce/consulta.jsf")
     )
 
+    private val knownPortalHosts: Set<String> by lazy {
+        allPortals.mapNotNull { portal ->
+            runCatching { java.net.URI(portal.url).host?.lowercase() }.getOrNull()
+        }.toSet()
+    }
+
+    private fun isPrivateOrLoopbackHost(host: String): Boolean {
+        val h = host.trim().lowercase().trim('[', ']')
+        if (h.isBlank() ||
+            h == "localhost" ||
+            h == "0.0.0.0" ||
+            h == "::1" ||
+            h.endsWith(".local") ||
+            h.endsWith(".internal") ||
+            h.startsWith("fe80:") ||
+            h.startsWith("fc00:") ||
+            h.startsWith("fd")
+        ) {
+            return true
+        }
+        val ipv4Match = Regex("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$").matchEntire(h)
+        if (ipv4Match != null) {
+            val a = ipv4Match.groupValues[1].toIntOrNull() ?: return true
+            val b = ipv4Match.groupValues[2].toIntOrNull() ?: return true
+            if (a == 10 || a == 127 || a == 0) return true
+            if (a == 169 && b == 254) return true
+            if (a == 192 && b == 168) return true
+            if (a == 172 && b in 16..31) return true
+            return true // Bloqueia IPs literais em consultas SEFAZ
+        }
+        return false
+    }
+
+    /**
+     * Valida e normaliza URLs para portais oficiais da SEFAZ (.gov.br) sobre HTTPS,
+     * bloqueando esquemas perigosos (file://, javascript:, intent://) e endereços internos.
+     */
+    fun sanitizeSefazUrl(rawUrl: String): String? {
+        val trimmed = rawUrl.trim()
+        if (trimmed.isBlank() || trimmed.length > 4096) return null
+        val uri = runCatching { java.net.URI(trimmed) }.getOrNull() ?: return null
+        val scheme = uri.scheme?.lowercase() ?: return null
+        if (scheme != "https" && scheme != "http") return null
+        if (!uri.userInfo.isNullOrBlank()) return null
+        if (uri.port != -1 && uri.port != 443 && uri.port != 80) return null
+        val host = uri.host?.lowercase() ?: return null
+        if (isPrivateOrLoopbackHost(host)) return null
+        val isGovDomain = host.endsWith(".gov.br") || host in knownPortalHosts
+        if (!isGovDomain) return null
+        return if (scheme == "http") {
+            trimmed.replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
+        } else {
+            trimmed
+        }
+    }
+
+    fun isAllowedWebViewNavigationUrl(rawUrl: String): Boolean {
+        val trimmed = rawUrl.trim()
+        if (trimmed.isBlank() || trimmed.length > 4096) return false
+        val uri = runCatching { java.net.URI(trimmed) }.getOrNull() ?: return false
+        if (uri.scheme?.lowercase() != "https") return false
+        if (!uri.userInfo.isNullOrBlank()) return false
+        val host = uri.host?.lowercase() ?: return false
+        return !isPrivateOrLoopbackHost(host)
+    }
+
     fun extractAccessKey(input: String): String? {
         val digitsOnly = input.replace(Regex("[^0-9]"), "")
         return Regex("\\d{44}").find(digitsOnly)?.value
@@ -56,21 +122,22 @@ object SefazPortals {
             val uf = key.substring(0, 2)
             allPortals.firstOrNull { it.ufCode == uf }?.let { return it }
         }
-        if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+        val safeUrl = sanitizeSefazUrl(trimmed)
+        if (safeUrl != null) {
             allPortals.firstOrNull { portal ->
                 val host = portal.url.substringAfter("://").substringBefore("/")
-                trimmed.contains(host, ignoreCase = true)
+                safeUrl.contains(host, ignoreCase = true)
             }?.let { return it }
 
             allPortals.firstOrNull { portal ->
-                portal.ufCode != "00" && trimmed.contains(".${portal.ufSigla.lowercase()}.gov.br", ignoreCase = true)
+                portal.ufCode != "00" && safeUrl.contains(".${portal.ufSigla.lowercase()}.gov.br", ignoreCase = true)
             }?.let { return it }
         }
         return allPortals.first()
     }
 
     fun buildFillKeyJs(accessKey: String): String {
-        val safeKey = accessKey.replace(Regex("[^0-9]"), "")
+        val safeKey = accessKey.replace(Regex("[^0-9]"), "").take(44)
         return """
             (function() {
                 var inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="search"], input[type="tel"], input:not([type])'));

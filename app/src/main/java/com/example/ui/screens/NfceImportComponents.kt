@@ -89,9 +89,11 @@ import com.example.ui.viewmodel.AstroUiState
 import com.example.ui.viewmodel.NfceImportState
 
 internal fun openUrlInExternalBrowser(context: android.content.Context, url: String) {
-    if (url.isBlank()) return
+    val safeUrl = SefazPortals.sanitizeSefazUrl(url)
+        ?: url.trim().takeIf { SefazPortals.isAllowedWebViewNavigationUrl(it) }
+        ?: return
     runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(safeUrl)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
@@ -282,12 +284,19 @@ internal fun NfcePortalWebViewDialog(
                             WebView(ctx).apply {
                                 val cm = CookieManager.getInstance()
                                 cm.setAcceptCookie(true)
-                                cm.setAcceptThirdPartyCookies(this, true)
+                                cm.setAcceptThirdPartyCookies(this, false)
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
-                                settings.javaScriptCanOpenWindowsAutomatically = true
+                                settings.javaScriptCanOpenWindowsAutomatically = false
                                 settings.setSupportMultipleWindows(false)
-                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                                settings.allowFileAccess = false
+                                settings.allowContentAccess = false
+                                @Suppress("DEPRECATION")
+                                settings.allowFileAccessFromFileURLs = false
+                                @Suppress("DEPRECATION")
+                                settings.allowUniversalAccessFromFileURLs = false
+                                settings.safeBrowsingEnabled = true
+                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
                                 settings.loadWithOverviewMode = true
@@ -300,13 +309,7 @@ internal fun NfcePortalWebViewDialog(
                                         request: WebResourceRequest?
                                     ): Boolean {
                                         val reqUrl = request?.url?.toString().orEmpty()
-                                        if (reqUrl.startsWith("http://", ignoreCase = true) ||
-                                            reqUrl.startsWith("https://", ignoreCase = true)
-                                        ) {
-                                            return false
-                                        }
-                                        openUrlInExternalBrowser(ctx, reqUrl)
-                                        return true
+                                        return !SefazPortals.isAllowedWebViewNavigationUrl(reqUrl)
                                     }
 
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -357,18 +360,21 @@ internal fun NfcePortalWebViewDialog(
                                         webProgress = newProgress
                                     }
                                 }
-                                loadUrl(nfceState.activePortalUrl)
+                                val initialSafeUrl = SefazPortals.sanitizeSefazUrl(nfceState.activePortalUrl)
+                                    ?: nfceState.selectedPortal.url
+                                loadUrl(initialSafeUrl)
                                 webViewRef = this
                             }
                         },
                         update = { wv ->
-                            if (nfceState.activePortalUrl.isNotBlank() &&
-                                wv.url != nfceState.activePortalUrl &&
-                                currentUrl != nfceState.activePortalUrl
+                            val targetSafeUrl = SefazPortals.sanitizeSefazUrl(nfceState.activePortalUrl)
+                            if (!targetSafeUrl.isNullOrBlank() &&
+                                wv.url != targetSafeUrl &&
+                                currentUrl != targetSafeUrl
                             ) {
                                 webErrorMessage = null
-                                currentUrl = nfceState.activePortalUrl
-                                wv.loadUrl(nfceState.activePortalUrl)
+                                currentUrl = targetSafeUrl
+                                wv.loadUrl(targetSafeUrl)
                             }
                             webViewRef = wv
                         },

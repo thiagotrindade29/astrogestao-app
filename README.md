@@ -17,3 +17,8 @@ Aplicativo Android em Kotlin e Jetpack Compose para controle de estoque domésti
 - **Gestão de Produtos (CRUD)**: Busca em tempo real por nome, código único `AST-XXXX` ou código de barras, filtro por categoria colorida e chave **Somente estoque baixo**.
 - **Análise Financeira**: Valor patrimonial em casa, total gasto em compras, consumo estimado, histórico de compras do Modo Mercado e gráficos em Compose `Canvas`.
 - **Movimentações com Auditoria & Categorias**: Registro de `Entrada`, `Saída` e `Ajuste de Saldo` com saldo anterior/atual, motivo, autor e setores coloridos da casa.
+
+## Segurança & Build no GitHub Actions
+
+- `app/google-services.json` é ignorado no Git (`.gitignore`); use `app/google-services.example.json` apenas como referência estrutural sem credenciais.
+- Para compilar o APK no GitHub Actions, adicione o secret `GOOGLE_SERVICES_JSON_BASE64` (conteúdo do `app/google-services.json` em Base64) em **Settings > Secrets and variables > Actions** (e opcionalmente `ANDROID_KEYSTORE_BASE64`).

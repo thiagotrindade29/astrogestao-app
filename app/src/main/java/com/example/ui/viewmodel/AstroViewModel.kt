@@ -925,13 +925,14 @@ class AstroViewModel(
                 val portal = SefazPortals.detectForInput(qrRaw)
                 val key = SefazPortals.extractAccessKey(qrRaw) ?: ocrResult?.accessKey
 
-                if (qrRaw.startsWith("http://", ignoreCase = true) || qrRaw.startsWith("https://", ignoreCase = true)) {
-                    val sefazResult = withContext(Dispatchers.IO) { NfceParser.fetchAndParseUrl(qrRaw) }
+                val safeQrUrl = SefazPortals.sanitizeSefazUrl(qrRaw)
+                if (safeQrUrl != null) {
+                    val sefazResult = withContext(Dispatchers.IO) { NfceParser.fetchAndParseUrl(safeQrUrl) }
                     when {
                         sefazResult.items.isNotEmpty() -> {
                             _nfceState.value = _nfceState.value.copy(
                                 isFetching = false,
-                                inputQuery = qrRaw,
+                                inputQuery = safeQrUrl,
                                 detectedKey = sefazResult.accessKey ?: key,
                                 selectedPortal = portal,
                                 storeName = sefazResult.storeName ?: ocrResult?.storeName,
@@ -942,10 +943,10 @@ class AstroViewModel(
                         ocrResult != null && ocrResult.items.isNotEmpty() -> {
                             _nfceState.value = _nfceState.value.copy(
                                 isFetching = false,
-                                inputQuery = qrRaw,
+                                inputQuery = safeQrUrl,
                                 detectedKey = key,
                                 selectedPortal = portal,
-                                activePortalUrl = qrRaw,
+                                activePortalUrl = safeQrUrl,
                                 storeName = ocrResult.storeName,
                                 parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
                                 statusMessage = "QR Code (${portal.ufSigla}) detectado e ${ocrResult.items.size} item(ns) extraído(s) via OCR! Confira abaixo ou abra o link oficial da SEFAZ se faltar algum item."
@@ -955,15 +956,21 @@ class AstroViewModel(
                             _nfceState.value = _nfceState.value.copy(
                                 isFetching = false,
                                 activeTab = 1,
-                                inputQuery = qrRaw,
+                                inputQuery = safeQrUrl,
                                 detectedKey = key,
                                 selectedPortal = portal,
-                                activePortalUrl = qrRaw,
+                                activePortalUrl = safeQrUrl,
                                 showWebPortal = true,
                                 statusMessage = "QR Code (${portal.ufSigla}) detectado! Abrindo a nota no portal SEFAZ abaixo."
                             )
                         }
                     }
+                    return@launch
+                } else if (qrRaw.startsWith("http://", ignoreCase = true) || qrRaw.startsWith("https://", ignoreCase = true)) {
+                    _nfceState.value = _nfceState.value.copy(
+                        isFetching = false,
+                        statusMessage = "QR Code ignorado por segurança: apenas links oficiais da SEFAZ (.gov.br) são permitidos."
+                    )
                     return@launch
                 } else if (key != null) {
                     if (ocrResult != null && ocrResult.items.isNotEmpty()) {
@@ -1019,7 +1026,7 @@ class AstroViewModel(
     fun openRegionalPortal() {
         val current = _nfceState.value
         val trimmed = current.inputQuery.trim()
-        val targetUrl = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else current.selectedPortal.url
+        val targetUrl = SefazPortals.sanitizeSefazUrl(trimmed) ?: current.selectedPortal.url
         _nfceState.value = current.copy(
             activePortalUrl = targetUrl,
             showWebPortal = true,
@@ -1055,14 +1062,23 @@ class AstroViewModel(
         }
 
         if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
+            val safeUrl = SefazPortals.sanitizeSefazUrl(raw)
+            if (safeUrl == null) {
+                _nfceState.value = _nfceState.value.copy(
+                    isFetching = false,
+                    showWebPortal = false,
+                    statusMessage = "URL bloqueada por segurança: informe um link oficial da SEFAZ (.gov.br) com HTTPS."
+                )
+                return
+            }
             viewModelScope.launch {
-                val portal = SefazPortals.detectForInput(raw)
+                val portal = SefazPortals.detectForInput(safeUrl)
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = true,
                     selectedPortal = portal,
                     statusMessage = "Consultando SEFAZ (${portal.ufSigla})..."
                 )
-                val result = withContext(Dispatchers.IO) { NfceParser.fetchAndParseUrl(raw) }
+                val result = withContext(Dispatchers.IO) { NfceParser.fetchAndParseUrl(safeUrl) }
                 val defaultCat = uiState.value.categories.firstOrNull()?.id
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
@@ -1070,7 +1086,7 @@ class AstroViewModel(
                     detectedKey = result.accessKey ?: _nfceState.value.detectedKey,
                     parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
                     showWebPortal = result.requiresWebPortal || result.items.isEmpty(),
-                    activePortalUrl = result.portalUrl ?: raw,
+                    activePortalUrl = result.portalUrl?.let { SefazPortals.sanitizeSefazUrl(it) } ?: portal.url,
                     statusMessage = result.message
                 )
             }

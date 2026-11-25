@@ -13,3 +13,12 @@ captures/
 .externalNativeBuild/
 .cxx/
 *-debug.log
+
+# Firebase config, keystores & environment secrets
+app/google-services.json
+google-services*.json
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
