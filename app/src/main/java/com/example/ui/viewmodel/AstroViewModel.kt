@@ -857,7 +857,12 @@ class AstroViewModel(
     // ---- IMPORTADOR DE NFC-E / CUPONS FISCAIS ----
 
     fun selectNfceTab(tabIndex: Int) {
-        _nfceState.value = _nfceState.value.copy(activeTab = tabIndex.coerceIn(0, 1))
+        _nfceState.value = _nfceState.value.copy(
+            activeTab = tabIndex.coerceIn(0, 1),
+            errorTitle = null,
+            errorMessage = null,
+            errorAction = NfceErrorAction.NONE
+        )
     }
 
     fun selectRegionalPortal(portal: RegionalPortal) {
@@ -865,7 +870,10 @@ class AstroViewModel(
         _nfceState.value = current.copy(
             selectedPortal = portal,
             activePortalUrl = SefazPortals.resolvePortalUrl(portal, current.detectedKey),
-            statusMessage = "Estado selecionado: ${portal.label}."
+            statusMessage = "Estado selecionado: ${portal.label}.",
+            errorTitle = null,
+            errorMessage = null,
+            errorAction = NfceErrorAction.NONE
         )
     }
 
@@ -875,7 +883,10 @@ class AstroViewModel(
         _nfceState.value = _nfceState.value.copy(
             inputQuery = input,
             detectedKey = key,
-            selectedPortal = detectedPortal
+            selectedPortal = detectedPortal,
+            errorTitle = null,
+            errorMessage = null,
+            errorAction = NfceErrorAction.NONE
         )
     }
 
@@ -888,23 +899,34 @@ class AstroViewModel(
         if (raw.isBlank()) return
         val result = NfceParser.parseRawReceiptText(raw)
         val defaultCat = uiState.value.categories.firstOrNull()?.id
-        _nfceState.value = _nfceState.value.copy(
-            storeName = result.storeName ?: _nfceState.value.storeName,
-            detectedKey = result.accessKey ?: _nfceState.value.detectedKey,
-            parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
-            statusMessage = if (result.items.isNotEmpty()) {
-                "Pronto! Encontramos ${result.items.size} item(ns) no texto."
-            } else {
-                "Não conseguimos separar os produtos. Coloque um item por linha com quantidade e preço (ex: Arroz 5kg  1 un  24,90)."
-            }
-        )
+        if (result.items.isNotEmpty()) {
+            _nfceState.value = _nfceState.value.copy(
+                storeName = result.storeName ?: _nfceState.value.storeName,
+                detectedKey = result.accessKey ?: _nfceState.value.detectedKey,
+                parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
+                statusMessage = "Pronto! Encontramos ${result.items.size} produto(s).",
+                errorTitle = null,
+                errorMessage = null,
+                errorAction = NfceErrorAction.NONE
+            )
+        } else {
+            _nfceState.value = _nfceState.value.copy(
+                statusMessage = null,
+                errorTitle = "Não foi possível ler os itens",
+                errorMessage = "Tente tirar uma foto da lista de produtos do cupom ou digite os 44 números da chave.",
+                errorAction = NfceErrorAction.TRY_PHOTO
+            )
+        }
     }
 
     fun processReceiptImage(context: Context, imageUri: Uri) {
         viewModelScope.launch {
             _nfceState.value = _nfceState.value.copy(
                 isFetching = true,
-                statusMessage = "Lendo seu cupom fiscal... Aguarde um instante."
+                statusMessage = "Lendo seu cupom fiscal... Aguarde um instante.",
+                errorTitle = null,
+                errorMessage = null,
+                errorAction = NfceErrorAction.NONE
             )
 
             val scanResult = runCatching {
@@ -914,7 +936,10 @@ class AstroViewModel(
             if (scanResult == null) {
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
-                    statusMessage = "Não foi possível abrir essa foto. Tente tirar outra imagem com mais luz."
+                    statusMessage = null,
+                    errorTitle = "Não foi possível abrir essa imagem",
+                    errorMessage = "Escolha outra foto mais nítida ou digite os 44 números da chave do cupom.",
+                    errorAction = NfceErrorAction.TRY_PHOTO
                 )
                 return@launch
             }
@@ -936,35 +961,44 @@ class AstroViewModel(
                         sefazResult.items.isNotEmpty() -> {
                             _nfceState.value = _nfceState.value.copy(
                                 isFetching = false,
-                                inputQuery = safeQrUrl,
+                                inputQuery = key ?: safeQrUrl,
                                 detectedKey = sefazResult.accessKey ?: key,
                                 selectedPortal = portal,
                                 storeName = sefazResult.storeName ?: ocrResult?.storeName,
                                 parsedItems = sefazResult.items.map { it.copy(categoryId = defaultCat) },
-                                statusMessage = "Cupom lido pelo QR Code! Confira os ${sefazResult.items.size} item(ns) abaixo."
+                                statusMessage = "Pronto! Trouxemos ${sefazResult.items.size} produto(s) do cupom.",
+                                errorTitle = null,
+                                errorMessage = null,
+                                errorAction = NfceErrorAction.NONE
                             )
                         }
                         ocrResult != null && ocrResult.items.isNotEmpty() -> {
                             _nfceState.value = _nfceState.value.copy(
                                 isFetching = false,
-                                inputQuery = safeQrUrl,
+                                inputQuery = key ?: safeQrUrl,
                                 detectedKey = key,
                                 selectedPortal = portal,
                                 activePortalUrl = safeQrUrl,
                                 storeName = ocrResult.storeName,
                                 parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                                statusMessage = "Lemos ${ocrResult.items.size} item(ns) direto da foto do cupom! Confira abaixo antes de importar."
+                                statusMessage = "Lemos ${ocrResult.items.size} produto(s) direto da foto do cupom! Confira abaixo antes de salvar.",
+                                errorTitle = null,
+                                errorMessage = null,
+                                errorAction = NfceErrorAction.NONE
                             )
                         }
                         else -> {
                             _nfceState.value = _nfceState.value.copy(
                                 isFetching = false,
-                                inputQuery = safeQrUrl,
+                                inputQuery = key ?: safeQrUrl,
                                 detectedKey = key,
                                 selectedPortal = portal,
                                 activePortalUrl = safeQrUrl,
                                 showWebPortal = true,
-                                statusMessage = "QR Code encontrado (${portal.ufSigla})! Se o site pedir confirmação, resolva na tela que capturamos os itens automaticamente."
+                                statusMessage = "Código lido (${portal.ufSigla})! Confirme na página que abrimos para trazer os produtos.",
+                                errorTitle = null,
+                                errorMessage = null,
+                                errorAction = NfceErrorAction.NONE
                             )
                         }
                     }
@@ -980,18 +1014,23 @@ class AstroViewModel(
                             activePortalUrl = resolvedPortalUrl,
                             storeName = ocrResult.storeName,
                             parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                            statusMessage = "Pronto! Lemos ${ocrResult.items.size} item(ns) do seu cupom."
+                            statusMessage = "Pronto! Lemos ${ocrResult.items.size} produto(s) do seu cupom.",
+                            errorTitle = null,
+                            errorMessage = null,
+                            errorAction = NfceErrorAction.NONE
                         )
                     } else {
                         _nfceState.value = _nfceState.value.copy(
                             isFetching = false,
-                            activeTab = 1,
                             inputQuery = key,
                             detectedKey = key,
                             selectedPortal = portal,
                             activePortalUrl = resolvedPortalUrl,
                             showWebPortal = true,
-                            statusMessage = "Número da nota detectado (${portal.ufSigla}). Abrindo a consulta para buscar seus produtos."
+                            statusMessage = "Chave identificada (${portal.ufSigla}). Abrindo a consulta para buscar seus produtos.",
+                            errorTitle = null,
+                            errorMessage = null,
+                            errorAction = NfceErrorAction.NONE
                         )
                     }
                     return@launch
@@ -1003,13 +1042,19 @@ class AstroViewModel(
                             detectedKey = ocrResult.accessKey ?: _nfceState.value.detectedKey,
                             selectedPortal = ocrResult.accessKey?.let { SefazPortals.detectForInput(it) } ?: _nfceState.value.selectedPortal,
                             parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                            statusMessage = "Pronto! Lemos ${ocrResult.items.size} item(ns) direto da foto do cupom."
+                            statusMessage = "Pronto! Lemos ${ocrResult.items.size} produto(s) direto da foto do cupom.",
+                            errorTitle = null,
+                            errorMessage = null,
+                            errorAction = NfceErrorAction.NONE
                         )
                         return@launch
                     }
                     _nfceState.value = _nfceState.value.copy(
                         isFetching = false,
-                        statusMessage = "O QR Code lido não era da nota fiscal (ex: Pix ou propaganda). Tente focar apenas na lista de produtos ou no QR Code do cupom."
+                        statusMessage = null,
+                        errorTitle = "Esse código não é do cupom fiscal",
+                        errorMessage = "O código apontado parece ser de Pix ou propaganda. Aponte apenas para o QR Code da nota ou digite os 44 números.",
+                        errorAction = NfceErrorAction.TRY_PHOTO
                     )
                     return@launch
                 }
@@ -1020,22 +1065,46 @@ class AstroViewModel(
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
                     storeName = ocrResult.storeName,
+                    inputQuery = ocrResult.accessKey ?: _nfceState.value.inputQuery,
                     detectedKey = ocrResult.accessKey ?: _nfceState.value.detectedKey,
                     selectedPortal = resolvedPortal,
                     activePortalUrl = SefazPortals.resolvePortalUrl(resolvedPortal, ocrResult.accessKey),
                     parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                    statusMessage = "Pronto! Lemos ${ocrResult.items.size} item(ns) do seu cupom."
+                    statusMessage = "Pronto! Lemos ${ocrResult.items.size} produto(s) da foto do cupom.",
+                    errorTitle = null,
+                    errorMessage = null,
+                    errorAction = NfceErrorAction.NONE
                 )
             } else {
-                _nfceState.value = _nfceState.value.copy(
-                    isFetching = false,
-                    rawReceiptTextInput = scanResult.ocrText,
-                    statusMessage = if (scanResult.ocrText.isNotBlank()) {
-                        "A foto ficou um pouco difícil de ler os preços. Tente aproximar mais a câmera da lista de produtos ou use \"Escanear QR Code\"."
-                    } else {
-                        "Não conseguimos ler o QR Code nem os produtos nessa foto. Tente tirar outra foto bem iluminada e reta."
-                    }
-                )
+                val detectedKeyOnly = ocrResult?.accessKey
+                if (detectedKeyOnly != null) {
+                    val resolvedPortal = SefazPortals.detectForInput(detectedKeyOnly)
+                    val targetUrl = SefazPortals.resolvePortalUrl(resolvedPortal, detectedKeyOnly)
+                    _nfceState.value = _nfceState.value.copy(
+                        isFetching = false,
+                        inputQuery = detectedKeyOnly,
+                        detectedKey = detectedKeyOnly,
+                        selectedPortal = resolvedPortal,
+                        activePortalUrl = targetUrl,
+                        showWebPortal = true,
+                        statusMessage = "Lemos os 44 números na foto (${resolvedPortal.ufSigla})! Abrindo a nota para trazer os itens.",
+                        errorTitle = null,
+                        errorMessage = null,
+                        errorAction = NfceErrorAction.NONE
+                    )
+                } else {
+                    _nfceState.value = _nfceState.value.copy(
+                        isFetching = false,
+                        statusMessage = null,
+                        errorTitle = "Não conseguimos ler os produtos na foto",
+                        errorMessage = if (scanResult.ocrText.isNotBlank()) {
+                            "A imagem ficou um pouco embaçada ou longe. Aproxime mais da lista de produtos em local claro, ou digite os 44 números."
+                        } else {
+                            "Não encontramos código nem itens visíveis na foto. Tente em um lugar bem iluminado com o cupom reto."
+                        },
+                        errorAction = NfceErrorAction.TRY_PHOTO
+                    )
+                }
             }
         }
     }
@@ -1052,10 +1121,13 @@ class AstroViewModel(
             activePortalUrl = targetUrl,
             showWebPortal = true,
             statusMessage = if (key != null) {
-                "Site da nota aberto (${portal.ufSigla}). A chave já será preenchida; resolva a verificação na tela que capturamos os itens."
+                "Página da nota aberta (${portal.ufSigla}). Já vamos preencher os 44 números; confirme a verificação na tela."
             } else {
-                "Site da nota aberto (${portal.ufSigla}). Consulte a nota na página e capturamos os itens automaticamente."
-            }
+                "Página da nota aberta (${portal.ufSigla}). Digite os números na página que traremos os produtos."
+            },
+            errorTitle = null,
+            errorMessage = null,
+            errorAction = NfceErrorAction.NONE
         )
     }
 
@@ -1069,27 +1141,20 @@ class AstroViewModel(
         _nfceState.value = NfceImportState(
             activeTab = current.activeTab,
             selectedPortal = current.selectedPortal,
-            statusMessage = "Importação descartada. Você pode ler um novo cupom ou consultar outra nota."
+            statusMessage = "Tudo limpo. Digite uma nova chave de 44 números ou escaneie outro cupom."
         )
     }
 
     fun consultNfceInput() {
         val raw = _nfceState.value.inputQuery.trim()
         if (raw.isBlank()) {
-            openRegionalPortal()
+            _nfceState.value = _nfceState.value.copy(
+                statusMessage = null,
+                errorTitle = "Digite a chave de acesso",
+                errorMessage = "Informe os 44 números impressos perto do código de barras do cupom, ou toque em \"Ler QR Code\".",
+                errorAction = NfceErrorAction.TRY_PHOTO
+            )
             return
-        }
-
-        if (!raw.startsWith("http", ignoreCase = true) && SefazPortals.extractAccessKey(raw) == null) {
-            val textResult = NfceParser.parseRawReceiptText(raw)
-            if (textResult.items.isNotEmpty()) {
-                val defaultCat = uiState.value.categories.firstOrNull()?.id
-                _nfceState.value = _nfceState.value.copy(
-                    parsedItems = textResult.items.map { it.copy(categoryId = defaultCat) },
-                    statusMessage = "Pronto! Encontramos ${textResult.items.size} item(ns)."
-                )
-                return
-            }
         }
 
         if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
@@ -1098,7 +1163,10 @@ class AstroViewModel(
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
                     showWebPortal = false,
-                    statusMessage = "Este endereço não parece ser de uma nota fiscal oficial (.gov.br). Confira o link ou use a foto do cupom."
+                    statusMessage = null,
+                    errorTitle = "Esse código não é de uma nota fiscal",
+                    errorMessage = "Verifique se o QR Code é mesmo do cupom fiscal (e não de Pix ou propaganda) ou digite os 44 números.",
+                    errorAction = NfceErrorAction.TRY_PHOTO
                 )
                 return
             }
@@ -1109,50 +1177,122 @@ class AstroViewModel(
                     isFetching = true,
                     selectedPortal = portal,
                     detectedKey = key ?: _nfceState.value.detectedKey,
-                    statusMessage = "Buscando produtos da sua nota (${portal.ufSigla})..."
+                    statusMessage = "Buscando produtos da sua nota (${portal.ufSigla})...",
+                    errorTitle = null,
+                    errorMessage = null,
+                    errorAction = NfceErrorAction.NONE
                 )
                 val result = withContext(Dispatchers.IO) { NfceParser.fetchAndParseUrl(safeUrl) }
                 val defaultCat = uiState.value.categories.firstOrNull()?.id
                 val resolvedPortalUrl = result.portalUrl?.let { SefazPortals.sanitizeSefazUrl(it) }
                     ?: SefazPortals.resolvePortalUrl(portal, result.accessKey ?: key, safeUrl)
-                _nfceState.value = _nfceState.value.copy(
-                    isFetching = false,
-                    storeName = result.storeName,
-                    detectedKey = result.accessKey ?: key ?: _nfceState.value.detectedKey,
-                    parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
-                    showWebPortal = result.requiresWebPortal || result.items.isEmpty(),
-                    activePortalUrl = resolvedPortalUrl,
-                    statusMessage = if (result.items.isNotEmpty()) {
-                        "Pronto! Encontramos ${result.items.size} item(ns) da sua nota."
-                    } else {
-                        "Abrindo a página da nota (${portal.ufSigla}). Se pedir confirmação, resolva na tela e toque em \"Extrair Itens\"."
-                    }
+
+                if (result.items.isNotEmpty()) {
+                    _nfceState.value = _nfceState.value.copy(
+                        isFetching = false,
+                        storeName = result.storeName,
+                        detectedKey = result.accessKey ?: key ?: _nfceState.value.detectedKey,
+                        parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
+                        showWebPortal = false,
+                        activePortalUrl = resolvedPortalUrl,
+                        statusMessage = "Pronto! Encontramos ${result.items.size} produto(s) da sua nota.",
+                        errorTitle = null,
+                        errorMessage = null,
+                        errorAction = NfceErrorAction.NONE
+                    )
+                } else if (result.requiresWebPortal) {
+                    _nfceState.value = _nfceState.value.copy(
+                        isFetching = false,
+                        storeName = result.storeName,
+                        detectedKey = result.accessKey ?: key ?: _nfceState.value.detectedKey,
+                        showWebPortal = true,
+                        activePortalUrl = resolvedPortalUrl,
+                        statusMessage = result.message ?: "Confirme na página da nota (${portal.ufSigla}) para trazermos os produtos.",
+                        errorTitle = null,
+                        errorMessage = null,
+                        errorAction = NfceErrorAction.NONE
+                    )
+                } else {
+                    _nfceState.value = _nfceState.value.copy(
+                        isFetching = false,
+                        showWebPortal = false,
+                        statusMessage = null,
+                        errorTitle = "Não foi possível consultar esse link",
+                        errorMessage = result.message ?: "Confira os 44 números impressos no cupom ou tire uma foto da lista de produtos.",
+                        errorAction = NfceErrorAction.TRY_PHOTO
+                    )
+                }
+            }
+            return
+        }
+
+        val key = SefazPortals.extractAccessKey(raw)
+        if (key == null) {
+            val digitCount = raw.count { it.isDigit() }
+            val (title, body, action) = when {
+                digitCount in 1..43 -> Triple(
+                    "Chave incompleta ($digitCount de 44 números)",
+                    "Faltam ${44 - digitCount} número(s). A chave de acesso tem sempre 44 números seguidos no cupom.",
+                    NfceErrorAction.NONE
+                )
+                digitCount > 44 -> Triple(
+                    "Números em excesso ($digitCount de 44)",
+                    "A chave tem exatamente 44 números. Confira se não há dígitos repetidos no campo.",
+                    NfceErrorAction.CLEAR_INPUT
+                )
+                else -> Triple(
+                    "Chave de acesso inválida",
+                    "Digite apenas os 44 números impressos no cupom ou toque em \"Ler QR Code\" para apontar a câmera.",
+                    NfceErrorAction.TRY_PHOTO
                 )
             }
-        } else {
-            val key = SefazPortals.extractAccessKey(raw)
-            val portal = SefazPortals.detectForInput(raw)
-            val targetUrl = SefazPortals.resolvePortalUrl(portal, key)
             _nfceState.value = _nfceState.value.copy(
-                detectedKey = key,
-                selectedPortal = portal,
-                activePortalUrl = targetUrl,
-                showWebPortal = true,
-                statusMessage = "Abrindo consulta (${portal.ufSigla}). Toque em \"Preencher Chave\", resolva a verificação e toque em \"Extrair Itens\"."
+                isFetching = false,
+                showWebPortal = false,
+                statusMessage = null,
+                errorTitle = title,
+                errorMessage = body,
+                errorAction = action
             )
+            return
         }
+
+        val portal = SefazPortals.detectForInput(key)
+        val targetUrl = SefazPortals.resolvePortalUrl(portal, key)
+        _nfceState.value = _nfceState.value.copy(
+            detectedKey = key,
+            selectedPortal = portal,
+            activePortalUrl = targetUrl,
+            showWebPortal = true,
+            statusMessage = "Chave pronta (${portal.ufSigla})! Confirme a verificação na página para buscarmos seus produtos.",
+            errorTitle = null,
+            errorMessage = null,
+            errorAction = NfceErrorAction.NONE
+        )
     }
 
     fun parseNfceXmlContent(xmlContent: String) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.Default) { NfceParser.parseNfceXml(xmlContent) }
             val defaultCat = uiState.value.categories.firstOrNull()?.id
-            _nfceState.value = _nfceState.value.copy(
-                storeName = result.storeName,
-                detectedKey = result.accessKey ?: _nfceState.value.detectedKey,
-                parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
-                statusMessage = result.message
-            )
+            if (result.items.isNotEmpty()) {
+                _nfceState.value = _nfceState.value.copy(
+                    storeName = result.storeName,
+                    detectedKey = result.accessKey ?: _nfceState.value.detectedKey,
+                    parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
+                    statusMessage = result.message,
+                    errorTitle = null,
+                    errorMessage = null,
+                    errorAction = NfceErrorAction.NONE
+                )
+            } else {
+                _nfceState.value = _nfceState.value.copy(
+                    statusMessage = null,
+                    errorTitle = "Não foi possível ler o arquivo da nota",
+                    errorMessage = result.message ?: "Confira se o arquivo escolhido é o XML completo da nota fiscal.",
+                    errorAction = NfceErrorAction.TRY_PHOTO
+                )
+            }
         }
     }
 
@@ -1164,11 +1304,17 @@ class AstroViewModel(
                 storeName = result.storeName ?: _nfceState.value.storeName,
                 parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
                 showWebPortal = false,
-                statusMessage = "Pronto! ${result.items.size} item(ns) capturado(s) da nota."
+                statusMessage = "Pronto! Trouxemos ${result.items.size} produto(s) da nota para você conferir.",
+                errorTitle = null,
+                errorMessage = null,
+                errorAction = NfceErrorAction.NONE
             )
         } else if (!isAutoScan) {
             _nfceState.value = _nfceState.value.copy(
-                statusMessage = "Ainda não vimos os produtos na página. Aguarde os itens aparecerem na tela ou tire uma foto do cupom."
+                statusMessage = null,
+                errorTitle = "Produtos ainda não apareceram",
+                errorMessage = "Aguarde a lista de produtos carregar na página antes de clicar em trazer, ou volte e tire uma foto do cupom.",
+                errorAction = NfceErrorAction.OPEN_BROWSER
             )
         }
     }
@@ -1198,7 +1344,13 @@ class AstroViewModel(
             return
         }
         val defaultCat = uiState.value.categories.firstOrNull()?.id
-        _nfceState.value = state.copy(isImporting = true, statusMessage = "Salvando itens no estoque...")
+        _nfceState.value = state.copy(
+            isImporting = true,
+            statusMessage = "Salvando produtos no estoque...",
+            errorTitle = null,
+            errorMessage = null,
+            errorAction = NfceErrorAction.NONE
+        )
         viewModelScope.launch {
             repository.importNfceItems(
                 household = ready.household,
@@ -1211,20 +1363,23 @@ class AstroViewModel(
             ).fold(
                 onSuccess = { count ->
                     if (count > 0) {
-                        _snackbarMessages.tryEmit("$count item(ns) importado(s) da NFC-e na nuvem!")
+                        _snackbarMessages.tryEmit("$count produto(s) importado(s) para o estoque!")
                         _nfceState.value = NfceImportState(selectedPortal = state.selectedPortal)
                         onSuccess()
                     } else {
                         _nfceState.value = _nfceState.value.copy(isImporting = false)
-                        _snackbarMessages.tryEmit("Selecione ao menos um item para importar.")
+                        _snackbarMessages.tryEmit("Marque pelo menos um produto antes de importar.")
                     }
                 },
                 onFailure = {
                     _nfceState.value = _nfceState.value.copy(
                         isImporting = false,
-                        statusMessage = "Não foi possível salvar os itens. Confira sua conexão e tente novamente."
+                        statusMessage = null,
+                        errorTitle = "Não foi possível salvar os produtos",
+                        errorMessage = "Confira sua conexão com a internet e tente novamente.",
+                        errorAction = NfceErrorAction.NONE
                     )
-                    emitResultError(it, "Falha ao importar itens do cupom.")
+                    emitResultError(it, "Falha ao importar produtos da nota.")
                 }
             )
         }

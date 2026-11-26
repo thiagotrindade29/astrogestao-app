@@ -4,12 +4,12 @@
     <string name="brand_subtitle">Estoque e finanças</string>
 
     <!-- Login -->
-    <string name="login_eyebrow">NUVEM &amp; FAMÍLIA SINCRONIZADOS</string>
+    <string name="login_eyebrow">ESTOQUE &amp; FAMÍLIA SINCRONIZADOS</string>
     <string name="login_headline">Seu estoque em qualquer celular.\nCompartilhado com sua família.</string>
     <string name="login_subheadline">Acesse com sua conta Google ou com e-mail e senha para sincronizar seus produtos, cupons e finanças na nuvem.</string>
     <string name="login_welcome_tag">ACESSO SEGURO NA NUVEM</string>
     <string name="login_title">Acesse sua conta</string>
-    <string name="login_subtitle">Entre com e-mail e senha ou sua conta Google. Cada usuário tem seu espaço isolado e pode compartilhar com a família via código.</string>
+    <string name="login_subtitle">Entre com e-mail e senha ou sua conta Google. Faça suas compras com segurança e sabendo quanto vai pagar antes de chegar no caixa.</string>
     <string name="action_sign_in_google">Entrar com Google</string>
     <string name="action_sign_in_email">Entrar com E-mail</string>
     <string name="action_create_account">Criar Conta</string>

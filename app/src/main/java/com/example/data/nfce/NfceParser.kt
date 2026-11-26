@@ -53,7 +53,7 @@ object NfceParser {
                 accessKey = key,
                 detectedUfSigla = detectedPortal.ufSigla,
                 requiresWebPortal = false,
-                message = "URL bloqueada por segurança: informe apenas links oficiais HTTPS da SEFAZ (.gov.br)."
+                message = "Esse link não é de uma nota fiscal oficial. Confira os 44 números do cupom ou tire uma foto da nota."
             )
 
         return try {
@@ -85,7 +85,7 @@ object NfceParser {
                                 accessKey = key,
                                 detectedUfSigla = detectedPortal.ufSigla,
                                 requiresWebPortal = false,
-                                message = "Redirecionamento bloqueado por segurança (destino fora dos domínios oficiais .gov.br)."
+                                message = "Esse link levou para fora do site oficial da nota. Tente digitar os 44 números ou usar a foto do cupom."
                             )
                     } else {
                         isSuccessful = response.isSuccessful
@@ -116,7 +116,7 @@ object NfceParser {
                     detectedUfSigla = detectedPortal.ufSigla,
                     requiresWebPortal = true,
                     portalUrl = currentUrl,
-                    message = "A SEFAZ (${detectedPortal.ufSigla}) retornou código $responseStatusCode. Abrindo no navegador integrado com cookies ativos para consulta."
+                    message = "O site da nota (${detectedPortal.ufSigla}) pediu confirmação na tela. Aguarde a página abrir abaixo."
                 )
             }
 
@@ -136,7 +136,7 @@ object NfceParser {
             if (htmlResult.items.isNotEmpty()) {
                 return htmlResult.copy(
                     detectedUfSigla = detectedPortal.ufSigla,
-                    message = "${htmlResult.items.size} item(ns) extraído(s) da SEFAZ (${detectedPortal.ufSigla})!"
+                    message = "Pronto! Encontramos ${htmlResult.items.size} produto(s) da sua nota."
                 )
             }
 
@@ -146,28 +146,28 @@ object NfceParser {
                 requiresWebPortal = true,
                 portalUrl = currentUrl,
                 message = if (hasCaptcha) {
-                    "A SEFAZ (${detectedPortal.ufSigla}) exige verificação/CAPTCHA. Resolva na tela abaixo; assim que a nota abrir, os itens serão capturados automaticamente (ou toque em Extrair Itens)."
+                    "O site da nota (${detectedPortal.ufSigla}) pediu uma verificação rápida. Confirme na tela que buscamos os produtos para você."
                 } else {
-                    "Nota aberta no portal (${detectedPortal.ufSigla}). Assim que os produtos aparecerem na página, toque em \"Extrair Itens da Página\" (ou envie a foto do cupom na primeira aba)."
+                    "Página da nota (${detectedPortal.ufSigla}) aberta. Assim que os produtos aparecerem, traremos tudo automaticamente."
                 }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             NfceParseResult(
                 accessKey = key,
                 detectedUfSigla = detectedPortal.ufSigla,
                 requiresWebPortal = true,
                 portalUrl = safeInitialUrl,
-                message = "Não foi possível consultar direto (${e.localizedMessage ?: "rede"}). Abrindo o link no portal integrado (${detectedPortal.ufSigla})."
+                message = "Abrindo a página da nota (${detectedPortal.ufSigla}) para concluir a consulta."
             )
         }
     }
 
     fun parseNfceXml(xmlContent: String): NfceParseResult {
         if (xmlContent.length > MAX_XML_CHARS) {
-            return NfceParseResult(message = "Arquivo XML excede o limite de tamanho permitido.")
+            return NfceParseResult(message = "Esse arquivo é muito grande para ser lido.")
         }
         if (xmlContent.contains("<!DOCTYPE", ignoreCase = true) || xmlContent.contains("<!ENTITY", ignoreCase = true)) {
-            return NfceParseResult(message = "Arquivo XML rejeitado por conter declarações DOCTYPE/ENTITY não suportadas.")
+            return NfceParseResult(message = "Não foi possível abrir esse arquivo porque o formato não é válido para nota fiscal.")
         }
 
         val items = mutableListOf<ParsedNfceItem>()
@@ -265,9 +265,9 @@ object NfceParser {
             detectedUfSigla = uf,
             items = items,
             message = if (items.isNotEmpty()) {
-                "${items.size} item(ns) extraído(s) do XML com sucesso."
+                "Pronto! Encontramos ${items.size} produto(s) no arquivo da nota."
             } else {
-                "Nenhum item <det><prod> encontrado no XML selecionado."
+                "Não encontramos produtos nesse arquivo. Confira se você escolheu o arquivo XML completo da nota."
             }
         )
     }
@@ -395,7 +395,7 @@ object NfceParser {
                 NfceParseResult(
                     storeName = storeName,
                     items = items,
-                    message = "${items.size} item(ns) extraído(s) do portal SEFAZ!"
+                    message = "Pronto! Trouxemos ${items.size} produto(s) da nota."
                 )
             } else {
                 val bodyText = if (allowRawTextFallback) obj.optString("rawText") else ""
@@ -404,16 +404,16 @@ object NfceParser {
                     if (ocrFallback.items.isNotEmpty()) {
                         return ocrFallback.copy(
                             storeName = storeName ?: ocrFallback.storeName,
-                            message = "${ocrFallback.items.size} item(ns) extraído(s) da visualização da SEFAZ!"
+                            message = "Pronto! Trouxemos ${ocrFallback.items.size} produto(s) da nota."
                         )
                     }
                 }
                 NfceParseResult(
-                    message = "Nenhum produto localizado na página atual. Resolva o CAPTCHA até aparecer a lista de produtos ou use a foto/print do cupom."
+                    message = "Ainda não vimos a lista de produtos na tela. Conclua a consulta na página ou volte e tire uma foto do cupom."
                 )
             }
-        } catch (e: Exception) {
-            NfceParseResult(message = "Não foi possível ler os itens da página: ${e.localizedMessage}")
+        } catch (_: Exception) {
+            NfceParseResult(message = "Não conseguimos ler os produtos dessa página. Tente novamente ou use a foto do cupom.")
         }
     }
 

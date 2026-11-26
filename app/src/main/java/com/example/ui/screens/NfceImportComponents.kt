@@ -29,12 +29,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -349,7 +351,7 @@ internal fun NfcePortalWebViewDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
                 .padding(10.dp)
                 .testTag("nfce_webview_dialog"),
             shape = MaterialTheme.shapes.large,
@@ -366,14 +368,14 @@ internal fun NfcePortalWebViewDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Site Oficial (${nfceState.selectedPortal.ufSigla})",
+                            text = "Consulta da Nota (${nfceState.selectedPortal.ufSigla})",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Resolva a confirmação. Capturamos os itens automático!",
+                            text = "Confirme na página abaixo que traremos os produtos.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -392,7 +394,7 @@ internal fun NfcePortalWebViewDialog(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "Colar Chave",
+                                text = "Preencher Chave",
                                 style = MaterialTheme.typography.labelMedium
                             )
                         }
@@ -509,7 +511,7 @@ internal fun NfcePortalWebViewDialog(
                                                             val textLen = parts.getOrNull(0)?.toIntOrNull() ?: -1
                                                             val domCount = parts.getOrNull(1)?.toIntOrNull() ?: -1
                                                             if (textLen == 0 && domCount == 0) {
-                                                                webErrorMessage = "O site da SEFAZ (${nfceState.selectedPortal.ufSigla}) abriu em branco (comum com bloqueio anti-robô ou VPN ativa). Toque em \"Abrir no Navegador\" abaixo para consultar pelo Chrome."
+                                                                webErrorMessage = "O portal da nota (${nfceState.selectedPortal.ufSigla}) abriu em branco. Abra no navegador do celular ou volte e tire uma foto do cupom."
                                                             }
                                                         }
                                                     }
@@ -523,8 +525,7 @@ internal fun NfcePortalWebViewDialog(
                                             ) {
                                                 super.onReceivedHttpError(view, request, errorResponse)
                                                 if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 400) {
-                                                    val code = errorResponse?.statusCode ?: 0
-                                                    webErrorMessage = "O site da SEFAZ (${nfceState.selectedPortal.ufSigla}) recusou o acesso interno (HTTP $code — comum com proteção anti-robô ou VPN). Toque em \"Abrir no Navegador\"."
+                                                    webErrorMessage = "O portal da nota (${nfceState.selectedPortal.ufSigla}) não pôde ser exibido aqui dentro. Abra no navegador do celular ou tire uma foto do cupom."
                                                 }
                                             }
 
@@ -535,7 +536,7 @@ internal fun NfcePortalWebViewDialog(
                                             ) {
                                                 super.onReceivedError(view, request, error)
                                                 if (request?.isForMainFrame == true) {
-                                                    webErrorMessage = "Não foi possível abrir o site dentro do app. Você pode abrir no navegador do celular (Chrome) ou tirar uma foto do cupom."
+                                                    webErrorMessage = "Não foi possível carregar essa página aqui dentro. Abra no navegador do celular ou volte e tire uma foto do cupom."
                                                 }
                                             }
 
@@ -545,7 +546,7 @@ internal fun NfcePortalWebViewDialog(
                                                 error: SslError?
                                             ) {
                                                 handler?.cancel()
-                                                webErrorMessage = "Este site estadual usa um certificado que precisa ser aberto no navegador do celular (Chrome)."
+                                                webErrorMessage = "Não foi possível abrir essa página aqui dentro com segurança. Toque em \"Abrir no Navegador\" abaixo."
                                             }
 
                                             override fun onRenderProcessGone(
@@ -559,7 +560,7 @@ internal fun NfcePortalWebViewDialog(
                                                 webViewRef = null
                                                 forceSoftwareLayer = true
                                                 rendererCrashed = true
-                                                webErrorMessage = "O visualizador interno precisou ser encerrado neste dispositivo. Toque em \"Abrir no Navegador\" para consultar a nota sem erros."
+                                                webErrorMessage = "A página da nota precisou ser fechada neste aparelho. Toque em \"Abrir no Navegador\" ou use a foto do cupom."
                                                 return true
                                             }
                                         }
@@ -614,7 +615,7 @@ internal fun NfcePortalWebViewDialog(
                                         modifier = Modifier.size(34.dp)
                                     )
                                     Text(
-                                        text = "Site indisponível aqui dentro",
+                                        text = "Não foi possível abrir a página aqui",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -681,7 +682,7 @@ internal fun NfcePortalWebViewDialog(
                     ) {
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("No Chrome", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Abrir no Chrome", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Button(
                         onClick = {
@@ -696,7 +697,7 @@ internal fun NfcePortalWebViewDialog(
                     ) {
                         Icon(Icons.Rounded.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Capturar Agora", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Trazer Produtos", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

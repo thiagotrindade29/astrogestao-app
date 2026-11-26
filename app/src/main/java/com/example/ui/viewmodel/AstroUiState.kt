@@ -57,6 +57,13 @@ data class PosMarketState(
         get() = cartItems.sumOf { it.subtotal }
 }
 
+enum class NfceErrorAction {
+    NONE,
+    OPEN_BROWSER,
+    TRY_PHOTO,
+    CLEAR_INPUT
+}
+
 data class NfceImportState(
     val activeTab: Int = 0,
     val selectedPortal: RegionalPortal = SefazPortals.allPortals.first(),
@@ -69,7 +76,10 @@ data class NfceImportState(
     val isImporting: Boolean = false,
     val storeName: String? = null,
     val parsedItems: List<ParsedNfceItem> = emptyList(),
-    val statusMessage: String? = null
+    val statusMessage: String? = null,
+    val errorTitle: String? = null,
+    val errorMessage: String? = null,
+    val errorAction: NfceErrorAction = NfceErrorAction.NONE
 )
 
 data class AstroUiState(
