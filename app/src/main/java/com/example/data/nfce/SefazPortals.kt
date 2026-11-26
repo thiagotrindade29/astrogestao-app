@@ -38,11 +38,14 @@ object SefazPortals {
         RegionalPortal("43", "RS", "Rio Grande do Sul (RS)", "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx"),
         RegionalPortal("11", "RO", "Rondônia (RO)", "https://www.nfce.sefin.ro.gov.br/"),
         RegionalPortal("14", "RR", "Roraima (RR)", "https://www.sefaz.rr.gov.br/nfce"),
-        RegionalPortal("42", "SC", "Santa Catarina (SC — SAT)", "https://sat.sef.sc.gov.br/tax.NET/Sat.NFe.Web/Consultas/ConsultaPublicaNFe.aspx?amb=PROD"),
+        RegionalPortal("42", "SC", "Santa Catarina (SC)", "https://sat.sef.sc.gov.br/tax.NET/Sat.DFe.NFCe.Web/Consultas/ConsultaPublicaNFCe.aspx"),
         RegionalPortal("35", "SP", "São Paulo (SP)", "https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica/Paginas/ConsultaPublica.aspx"),
         RegionalPortal("28", "SE", "Sergipe (SE)", "https://www.nfce.sefaz.se.gov.br/portal/portalNoticias.jsp"),
         RegionalPortal("17", "TO", "Tocantins (TO)", "https://www.sefaz.to.gov.br/nfce/consulta.jsf")
     )
+
+    private const val SC_NFE_MODEL_55_URL =
+        "https://sat.sef.sc.gov.br/tax.NET/Sat.NFe.Web/Consultas/ConsultaPublicaNFe.aspx?amb=PROD"
 
     private val knownPortalHosts: Set<String> by lazy {
         allPortals.mapNotNull { portal ->
@@ -78,13 +81,29 @@ object SefazPortals {
     }
 
     /**
+     * Normaliza caracteres `|` na query string (padrão oficial do QR Code NFC-e v2: `?p=CHAVE|2|1|1|HASH`)
+     * para `%7C` para compatibilidade estrita com RFC 2396 (`java.net.URI`), rejeitando espaços/controles.
+     */
+    private fun normalizeQueryAndParseUri(rawUrl: String): Pair<String, java.net.URI>? {
+        val trimmed = rawUrl.trim()
+        if (trimmed.isBlank() || trimmed.length > 4096) return null
+        if (trimmed.any { it.isWhitespace() || it.isISOControl() }) return null
+        val queryIdx = trimmed.indexOf('?')
+        val normalized = if (queryIdx >= 0) {
+            trimmed.substring(0, queryIdx) + trimmed.substring(queryIdx).replace("|", "%7C")
+        } else {
+            trimmed
+        }
+        val uri = runCatching { java.net.URI(normalized) }.getOrNull() ?: return null
+        return normalized to uri
+    }
+
+    /**
      * Valida e normaliza URLs para portais oficiais da SEFAZ (.gov.br) sobre HTTPS,
      * bloqueando esquemas perigosos (file://, javascript:, intent://) e endereços internos.
      */
     fun sanitizeSefazUrl(rawUrl: String): String? {
-        val trimmed = rawUrl.trim()
-        if (trimmed.isBlank() || trimmed.length > 4096) return null
-        val uri = runCatching { java.net.URI(trimmed) }.getOrNull() ?: return null
+        val (normalized, uri) = normalizeQueryAndParseUri(rawUrl) ?: return null
         val scheme = uri.scheme?.lowercase() ?: return null
         if (scheme != "https" && scheme != "http") return null
         if (!uri.userInfo.isNullOrBlank()) return null
@@ -94,25 +113,70 @@ object SefazPortals {
         val isGovDomain = host.endsWith(".gov.br") || host in knownPortalHosts
         if (!isGovDomain) return null
         return if (scheme == "http") {
-            trimmed.replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
+            normalized.replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
         } else {
-            trimmed
+            normalized
         }
     }
 
     fun isAllowedWebViewNavigationUrl(rawUrl: String): Boolean {
         val trimmed = rawUrl.trim()
-        if (trimmed.isBlank() || trimmed.length > 4096) return false
-        val uri = runCatching { java.net.URI(trimmed) }.getOrNull() ?: return false
+        if (trimmed.isBlank() || trimmed.length > 8192 || trimmed.any { it.isISOControl() }) return false
+        val queryIdx = trimmed.indexOf('?')
+        val safeForUri = if (queryIdx >= 0) {
+            val base = trimmed.substring(0, queryIdx)
+            val query = trimmed.substring(queryIdx)
+                .replace(" ", "%20")
+                .replace("|", "%7C")
+                .replace("{", "%7B")
+                .replace("}", "%7D")
+                .replace("[", "%5B")
+                .replace("]", "%5D")
+            base + query
+        } else {
+            trimmed
+        }
+        val uri = runCatching { java.net.URI(safeForUri) }.getOrNull() ?: return false
         if (uri.scheme?.lowercase() != "https") return false
         if (!uri.userInfo.isNullOrBlank()) return false
         val host = uri.host?.lowercase() ?: return false
         return !isPrivateOrLoopbackHost(host)
     }
 
+    fun upgradeGovHttpRedirect(rawUrl: String): String? {
+        val trimmed = rawUrl.trim()
+        if (!trimmed.startsWith("http://", ignoreCase = true)) return null
+        val upgraded = trimmed.replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
+        return sanitizeSefazUrl(upgraded)
+    }
+
+    private fun isValidUfPrefix(key: String): Boolean {
+        if (key.length != 44) return false
+        val uf = key.substring(0, 2)
+        return allPortals.any { it.ufCode != "00" && it.ufCode == uf }
+    }
+
     fun extractAccessKey(input: String): String? {
-        val digitsOnly = input.replace(Regex("[^0-9]"), "")
-        return Regex("\\d{44}").find(digitsOnly)?.value
+        // 1. Sequência contígua de 44 dígitos (URLs, XMLs, chave colada sem espaços)
+        val contiguousCandidates = Regex("(?<!\\d)(\\d{44})(?!\\d)")
+            .findAll(input)
+            .map { it.groupValues[1] }
+            .toList()
+        contiguousCandidates.firstOrNull(::isValidUfPrefix)?.let { return it }
+        contiguousCandidates.firstOrNull()?.let { return it }
+
+        // 2. Linha contendo a chave formatada em blocos (ex: 4226 1144 9078 ... 6346)
+        input.lines().forEach { line ->
+            Regex("(?<!\\d)(?:\\d[ \\t.\\-]?){43}\\d(?!\\d)").findAll(line).forEach { match ->
+                val candidate = match.value.replace(Regex("[^0-9]"), "")
+                if (candidate.length == 44 && isValidUfPrefix(candidate)) return candidate
+            }
+            val lineDigits = line.replace(Regex("[^0-9]"), "")
+            if (lineDigits.length == 44 && isValidUfPrefix(lineDigits)) {
+                return lineDigits
+            }
+        }
+        return null
     }
 
     fun detectForInput(input: String): RegionalPortal {
@@ -136,19 +200,43 @@ object SefazPortals {
         return allPortals.first()
     }
 
+    /**
+     * Escolhe a URL correta considerando se a chave é NFC-e (modelo 65) ou NF-e (modelo 55),
+     * evitando erro "modelo de DF-e diferente do solicitado" em portais estaduais separados.
+     */
+    fun resolvePortalUrl(portal: RegionalPortal, accessKey: String? = null, rawInput: String = ""): String {
+        sanitizeSefazUrl(rawInput)?.let { return it }
+        if (accessKey != null && accessKey.length == 44) {
+            val model = accessKey.substring(20, 22)
+            if (model == "55") {
+                return if (portal.ufCode == "42") SC_NFE_MODEL_55_URL else allPortals.first().url
+            }
+        }
+        return portal.url
+    }
+
     fun buildFillKeyJs(accessKey: String): String {
         val safeKey = accessKey.replace(Regex("[^0-9]"), "").take(44)
         return """
             (function() {
-                var inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="search"], input[type="tel"], input:not([type])'));
+                var inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="search"], input[type="tel"], input[type="number"], input:not([type])'));
                 var target = inputs.find(function(el) {
                     var hint = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.placeholder || '')).toLowerCase();
-                    return hint.indexOf('chave') >= 0 || hint.indexOf('chnfe') >= 0 || el.maxLength === 44;
+                    return hint.indexOf('chave') >= 0 || hint.indexOf('chnfe') >= 0 || hint.indexOf('acesso') >= 0 || el.maxLength === 44 || el.maxLength === 54;
                 }) || inputs.find(function(el) { return el.offsetParent !== null; });
                 if (target) {
                     target.focus();
-                    target.value = '$safeKey';
+                    if (target.maxLength > 0 && target.maxLength < 54) {
+                        target.removeAttribute('maxlength');
+                    }
+                    var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                    if (setter && setter.set) {
+                        setter.set.call(target, '$safeKey');
+                    } else {
+                        target.value = '$safeKey';
+                    }
                     target.dispatchEvent(new Event('input', { bubbles: true }));
+                    target.dispatchEvent(new Event('keyup', { bubbles: true }));
                     target.dispatchEvent(new Event('change', { bubbles: true }));
                     return 'ok';
                 }
@@ -161,8 +249,20 @@ object SefazPortals {
         (function() {
             var items = [];
             var store = '';
-            var storeEl = document.querySelector('#u20, .txtTopo, [id*="Razao"], [id*="Emitente"], [id*="NomeEmitente"], h1, h2');
-            if (storeEl) store = (storeEl.innerText || storeEl.textContent || '').trim();
+            var storeCandidates = Array.from(document.querySelectorAll('#u20, .txtTopo, [id*="Razao"], [id*="Emitente"], [id*="NomeEmitente"], h1, h2'));
+            for (var s = 0; s < storeCandidates.length; s++) {
+                var txt = (storeCandidates[s].innerText || storeCandidates[s].textContent || '').replace(/\s+/g, ' ').trim();
+                var low = txt.toLowerCase();
+                if (txt.length >= 3 &&
+                    low.indexOf('documento auxiliar') < 0 &&
+                    low.indexOf('danfe') < 0 &&
+                    low.indexOf('consulta p') < 0 &&
+                    low.indexOf('nfc-e') !== 0 &&
+                    low.indexOf('nf-e') !== 0) {
+                    store = txt;
+                    break;
+                }
+            }
 
             var svrsRows = document.querySelectorAll('#tabResult tr, tr[id^="Item"]');
             svrsRows.forEach(function(tr) {
@@ -172,7 +272,7 @@ object SefazPortals {
                 var text = tr.innerText || '';
                 var codeMatch = text.match(/C[oó]digo:\s*([^\)\s]+)/i);
                 var qtyMatch = text.match(/Qtde\.?:?\s*([0-9.,]+)/i);
-                var unMatch = text.match(/UN\.?:?\s*([A-Za-z]+)/i);
+                var unMatch = text.match(/\b(?:UN|Unid|Unidade)\.?:?\s*([A-Za-zÀ-ÿ]{1,6})/i);
                 var priceMatch = text.match(/Vl\.?\s*Unit\.?:?\s*(?:R\$)?\s*([0-9.,]+)/i);
                 if (name) {
                     items.push({
@@ -197,7 +297,7 @@ object SefazPortals {
                         var descIdx = headerCells.findIndex(function(h) { return h.indexOf('descri') >= 0 || h.indexOf('produto') >= 0 || h.indexOf('mercadoria') >= 0; });
                         var codeIdx = headerCells.findIndex(function(h) { return h.indexOf('cód') >= 0 || h.indexOf('cod') >= 0; });
                         var qtyIdx = headerCells.findIndex(function(h) { return h.indexOf('qtd') >= 0 || h.indexOf('quant') >= 0; });
-                        var unitIdx = headerCells.findIndex(function(h) { return h === 'un' || h === 'un.' || h.indexOf('unid') >= 0; });
+                        var unitIdx = headerCells.findIndex(function(h) { return h === 'un' || h === 'un.' || h === 'unid' || h === 'unid.' || h.indexOf('unid') >= 0 || h.indexOf('med') >= 0; });
                         var priceIdx = headerCells.findIndex(function(h) { return h.indexOf('unit') >= 0 || h.indexOf('vl. un') >= 0 || h.indexOf('valor un') >= 0; });
                         var totalIdx = headerCells.findIndex(function(h) { return h.indexOf('total') >= 0; });
 
@@ -214,6 +314,10 @@ object SefazPortals {
                             var code = (codeIdx >= 0 && texts[codeIdx]) ? texts[codeIdx] : (texts.find(function(t) { return /^[0-9]{4,14}$/.test(t); }) || '');
                             var qty = (qtyIdx >= 0 && texts[qtyIdx]) ? texts[qtyIdx] : '1';
                             var unit = (unitIdx >= 0 && texts[unitIdx]) ? texts[unitIdx] : (texts.find(function(t) { return /^(un|und|unid|kg|g|gr|l|ml|pct|cx|pc|lt)$/i.test(t); }) || 'un');
+                            var inlineUnitMatch = (qty + ' ' + texts.join(' ')).match(/[0-9.,]+\s*(kg|unid|und|un|ml|lt|pct|cx|gr)\b/i);
+                            if (unit.toLowerCase() === 'un' && inlineUnitMatch) {
+                                unit = inlineUnitMatch[1];
+                            }
                             var unitPrice = (priceIdx >= 0 && texts[priceIdx]) ? texts[priceIdx] : ((totalIdx >= 0 && texts[totalIdx]) ? texts[totalIdx] : '0');
 
                             if (priceIdx < 0) {

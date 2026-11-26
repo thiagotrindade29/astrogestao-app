@@ -75,14 +75,59 @@ jobs:
         run: |
           set -euo pipefail
           set +x
-          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '\r\n' | base64 -d > app/google-services.json
-          elif [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
-          elif [ ! -f app/google-services.json ]; then
-            echo "::error::Missing app/google-services.json. Add secret GOOGLE_SERVICES_JSON_BASE64 (or GOOGLE_SERVICES_JSON) in GitHub Repository Settings -> Secrets and variables -> Actions."
-            exit 1
-          fi
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import sys
+
+          b64_val = os.environ.get("GOOGLE_SERVICES_JSON_BASE64", "").strip()
+          raw_val = os.environ.get("GOOGLE_SERVICES_JSON", "").strip()
+          target_path = "app/google-services.json"
+
+          def decode_maybe_base64(text: str) -> str:
+              cleaned = text.lstrip("\ufeff").strip()
+              if cleaned.startswith("{"):
+                  return cleaned
+              compact = "".join(cleaned.split())
+              decoded = base64.b64decode(compact, validate=True).decode("utf-8").lstrip("\ufeff").strip()
+              return decoded
+
+          content = None
+          if b64_val:
+              try:
+                  content = decode_maybe_base64(b64_val)
+              except Exception:
+                  print("::error::GOOGLE_SERVICES_JSON_BASE64 nao e um Base64/UTF-8 valido.")
+                  sys.exit(1)
+          elif raw_val:
+              try:
+                  content = decode_maybe_base64(raw_val)
+              except Exception:
+                  print("::error::GOOGLE_SERVICES_JSON nao e um JSON valido nem Base64 valido do google-services.json.")
+                  sys.exit(1)
+          elif os.path.isfile(target_path):
+              with open(target_path, "r", encoding="utf-8-sig") as f:
+                  content = f.read().strip()
+          else:
+              print("::error::Missing app/google-services.json. Add secret GOOGLE_SERVICES_JSON_BASE64 (or GOOGLE_SERVICES_JSON) in GitHub Repository Settings -> Secrets and variables -> Actions.")
+              sys.exit(1)
+
+          try:
+              data = json.loads(content)
+          except Exception as exc:
+              print(f"::error::O secret do Firebase nao contem um JSON valido ({exc.__class__.__name__}). Cole o arquivo app/google-services.json completo.")
+              sys.exit(1)
+
+          if not isinstance(data, dict) or "project_info" not in data or "client" not in data:
+              top_keys = list(data.keys()) if isinstance(data, dict) else []
+              print(f"::error::O JSON em GOOGLE_SERVICES_JSON esta incompleto ou e o arquivo errado (chaves encontradas: {top_keys}). Ele precisa conter 'project_info' e 'client' do arquivo completo app/google-services.json (nao use firebase.json, firebase-blueprint.json ou apenas um trecho).")
+              sys.exit(1)
+
+          with open(target_path, "w", encoding="utf-8") as f:
+              f.write(json.dumps(data, indent=2))
+          print("Firebase google-services.json validado com sucesso (project_info e client presentes).")
+          PY
 
       - name: Prepare signing keystore
         shell: bash

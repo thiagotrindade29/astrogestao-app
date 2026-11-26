@@ -7,15 +7,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,20 +26,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Search
@@ -50,15 +49,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -85,7 +85,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.R
 import com.example.data.nfce.RegionalPortal
-import com.example.data.nfce.SefazPortals
 import com.example.ui.components.BarcodeScannerDialog
 import com.example.ui.theme.AstroTheme
 import com.example.ui.theme.JetBrainsMonoFamily
@@ -93,7 +92,7 @@ import com.example.ui.viewmodel.AstroUiState
 import com.example.ui.viewmodel.NfceImportState
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NfceImportScreen(
     uiState: AstroUiState,
@@ -113,13 +112,15 @@ fun NfceImportScreen(
     onToggleItem: (Int) -> Unit,
     onSelectItemCategory: (Int, Long) -> Unit,
     onConfirmImport: () -> Unit,
+    onDiscardImport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val extended = AstroTheme.extended
     var showImageSourceChooser by remember { mutableStateOf(false) }
     var showQrScanner by remember { mutableStateOf(false) }
-    var showAllStates by remember { mutableStateOf(false) }
+    var showStatePicker by remember { mutableStateOf(false) }
+    var showPasteText by remember { mutableStateOf(false) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
     BackHandler(onBack = onBack)
@@ -188,6 +189,14 @@ fun NfceImportScreen(
         )
     }
 
+    if (showStatePicker) {
+        NfceStatePickerDialog(
+            selectedPortal = nfceState.selectedPortal,
+            onSelectPortal = onSelectPortal,
+            onDismiss = { showStatePicker = false }
+        )
+    }
+
     if (nfceState.showWebPortal) {
         NfcePortalWebViewDialog(
             nfceState = nfceState,
@@ -197,6 +206,7 @@ fun NfceImportScreen(
     }
 
     val selectedCount = nfceState.parsedItems.count { it.selected }
+    val selectedTab = nfceState.activeTab.coerceIn(0, 1)
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -211,7 +221,7 @@ fun NfceImportScreen(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Importador de NF-e & Cupons Fiscais",
+                        text = "Importar Cupom Fiscal",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -230,42 +240,46 @@ fun NfceImportScreen(
                     )
                 }
             },
+            actions = {
+                if (nfceState.parsedItems.isNotEmpty() ||
+                    nfceState.inputQuery.isNotBlank() ||
+                    nfceState.detectedKey != null ||
+                    nfceState.rawReceiptTextInput.isNotBlank()
+                ) {
+                    IconButton(
+                        onClick = onDiscardImport,
+                        enabled = !nfceState.isImporting,
+                        modifier = Modifier.testTag("nfce_topbar_discard_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = "Excluir importação",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
             windowInsets = WindowInsets(0, 0, 0, 0),
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
         )
 
-        ScrollableTabRow(
-            selectedTabIndex = nfceState.activeTab,
-            edgePadding = 12.dp,
+        TabRow(
+            selectedTabIndex = selectedTab,
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Tab(
-                selected = nfceState.activeTab == 0,
+                selected = selectedTab == 0,
                 onClick = { onSelectTab(0) },
-                icon = { Icon(Icons.Rounded.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                text = { Text("Foto / Print do Cupom") },
+                icon = { Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                text = { Text("Câmera / Foto", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.testTag("nfce_tab_photo")
             )
             Tab(
-                selected = nfceState.activeTab == 1,
+                selected = selectedTab == 1,
                 onClick = { onSelectTab(1) },
                 icon = { Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                text = { Text("Link do QR Code (SEFAZ)") },
+                text = { Text("Chave / Arquivo", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 modifier = Modifier.testTag("nfce_tab_link")
-            )
-            Tab(
-                selected = nfceState.activeTab == 2,
-                onClick = { onSelectTab(2) },
-                icon = { Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                text = { Text("Arquivo XML da NF-e") },
-                modifier = Modifier.testTag("nfce_tab_xml")
-            )
-            Tab(
-                selected = nfceState.activeTab == 3,
-                onClick = { onSelectTab(3) },
-                icon = { Icon(Icons.Rounded.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                text = { Text("Colar Texto do Cupom") },
-                modifier = Modifier.testTag("nfce_tab_text")
             )
         }
 
@@ -276,14 +290,6 @@ fun NfceImportScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item {
-                Text(
-                    text = "Importe itens de compras direto para o estoque via foto do cupom, link do QR Code da SEFAZ (todo o Brasil) ou arquivo XML.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
             if (nfceState.isFetching) {
                 item {
                     Card(
@@ -298,7 +304,7 @@ fun NfceImportScreen(
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.5.dp)
                             Text(
-                                text = nfceState.statusMessage ?: "Processando cupom fiscal...",
+                                text = nfceState.statusMessage ?: "Lendo cupom fiscal...",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
@@ -322,7 +328,7 @@ fun NfceImportScreen(
                 }
             }
 
-            when (nfceState.activeTab) {
+            when (selectedTab) {
                 0 -> item {
                     val borderColor = extended.borderSubtle
                     Box(
@@ -344,18 +350,18 @@ fun NfceImportScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 28.dp),
+                                .padding(horizontal = 20.dp, vertical = 24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(58.dp)
+                                modifier = Modifier.size(60.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = Icons.Rounded.CameraAlt,
+                                        imageVector = Icons.Rounded.QrCodeScanner,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(30.dp)
@@ -363,67 +369,69 @@ fun NfceImportScreen(
                                 }
                             }
                             Text(
-                                text = "Tire uma Foto ou Selecione o Print do Cupom Fiscal",
+                                text = "Importe direto do seu cupom",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "O sistema detectará automaticamente se há um QR Code da SEFAZ na foto para buscar os dados eletrônicos oficiais em qualquer estado do Brasil. Se não houver QR Code visível, faremos a leitura ótica inteligente (OCR) dos itens impressos!",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "Aponte para o QR Code no fim do cupom (mais rápido) ou tire uma foto da lista de produtos.",
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+
                             Button(
+                                onClick = { showQrScanner = true },
+                                enabled = !nfceState.isFetching,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("nfce_scan_qr_button")
+                            ) {
+                                Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Escanear QR Code", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            }
+
+                            FilledTonalButton(
                                 onClick = { showImageSourceChooser = true },
                                 enabled = !nfceState.isFetching,
                                 modifier = Modifier
+                                    .fillMaxWidth()
                                     .height(48.dp)
                                     .testTag("nfce_choose_photo_button")
                             ) {
                                 Icon(Icons.Rounded.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Escolher Imagem / Tirar Foto")
+                                Text("Tirar Foto ou Escolher Print")
                             }
+
                             Text(
-                                text = "Dica: Para cupons muito longos, aproxime a câmera em blocos ou abra o QR Code direto no Chrome para baixar/copiar todos os itens.",
+                                text = "Dica: em local bem iluminado, o app lê os produtos da foto mesmo sem QR Code.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
-                            if (nfceState.inputQuery.startsWith("http", ignoreCase = true)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+                            if (nfceState.inputQuery.startsWith("http", ignoreCase = true) && nfceState.parsedItems.isEmpty()) {
+                                OutlinedButton(
+                                    onClick = onOpenPortal,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .testTag("nfce_photo_open_portal_button")
                                 ) {
-                                    OutlinedButton(
-                                        onClick = onOpenPortal,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("nfce_photo_open_portal_button")
-                                    ) {
-                                        Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Portal (${nfceState.selectedPortal.ufSigla})", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                    OutlinedButton(
-                                        onClick = { openUrlInExternalBrowser(context, nfceState.inputQuery.trim()) },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("nfce_photo_open_chrome_button")
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Abrir no Chrome", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
+                                    Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Abrir Site da Nota (${nfceState.selectedPortal.ufSigla})")
                                 }
                             }
                         }
                     }
                 }
 
-                1 -> {
+                else -> {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -437,76 +445,28 @@ fun NfceImportScreen(
                                     .padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Estado (Detecção Automática — Todo o Brasil)",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Text(
-                                            text = "Selecionado: ${nfceState.selectedPortal.label}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    TextButton(onClick = { showAllStates = !showAllStates }) {
-                                        Text(if (showAllStates) "Ocultar UFs" else "Todas as UFs (27)")
-                                        Icon(
-                                            imageVector = if (showAllStates) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                            contentDescription = null
-                                        )
-                                    }
-                                }
-
-                                if (showAllStates) {
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        SefazPortals.allPortals.forEach { portal ->
-                                            FilterChip(
-                                                selected = nfceState.selectedPortal.ufCode == portal.ufCode,
-                                                onClick = {
-                                                    onSelectPortal(portal)
-                                                    showAllStates = false
-                                                },
-                                                label = { Text(portal.ufSigla) },
-                                                modifier = Modifier.testTag("portal_chip_${portal.ufCode}")
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    val quickPortals = remember(nfceState.selectedPortal) {
-                                        val defaults = listOf("00", "42", "41", "43", "35", "31", "33", "29", "53")
-                                        val ids = (listOf(nfceState.selectedPortal.ufCode) + defaults).distinct()
-                                        ids.mapNotNull { id -> SefazPortals.allPortals.firstOrNull { it.ufCode == id } }
-                                    }
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        quickPortals.forEach { portal ->
-                                            FilterChip(
-                                                selected = nfceState.selectedPortal.ufCode == portal.ufCode,
-                                                onClick = { onSelectPortal(portal) },
-                                                label = { Text(portal.label) },
-                                                modifier = Modifier.testTag("portal_chip_${portal.ufCode}")
-                                            )
-                                        }
-                                    }
-                                }
+                                Text(
+                                    text = "Chave ou Link da Nota",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Cole o link do QR Code ou digite os 44 números impressos no cupom.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
 
                                 OutlinedTextField(
                                     value = nfceState.inputQuery,
                                     onValueChange = onInputChange,
-                                    placeholder = { Text("Cole o link do QR Code de qualquer estado ou a chave de 44 dígitos…") },
+                                    placeholder = { Text("Cole o link ou os 44 números...") },
+                                    trailingIcon = if (nfceState.inputQuery.isNotEmpty()) {
+                                        {
+                                            IconButton(onClick = { onInputChange("") }) {
+                                                Icon(Icons.Rounded.Clear, contentDescription = "Limpar")
+                                            }
+                                        }
+                                    } else null,
                                     minLines = 2,
                                     maxLines = 4,
                                     shape = MaterialTheme.shapes.small,
@@ -517,167 +477,192 @@ fun NfceImportScreen(
 
                                 if (nfceState.detectedKey != null) {
                                     Surface(
-                                        color = MaterialTheme.colorScheme.primaryContainer,
-                                        shape = MaterialTheme.shapes.extraSmall
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                        shape = MaterialTheme.shapes.small,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = "Chave (${nfceState.selectedPortal.ufSigla}): ${nfceState.detectedKey}",
+                                            text = "Chave detectada (${nfceState.selectedPortal.ufSigla}): ${nfceState.detectedKey}",
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                         )
                                     }
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showStatePicker = true }
                                 ) {
-                                    Button(
-                                        onClick = { showQrScanner = true },
+                                    Row(
                                         modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("nfce_scan_qr_button")
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Ler QR Code")
-                                    }
-                                    OutlinedButton(
-                                        onClick = onConsultInput,
-                                        enabled = !nfceState.isFetching,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("nfce_consult_button")
-                                    ) {
-                                        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Consultar")
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Place,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = "Estado: ${nfceState.selectedPortal.label}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text(
+                                            text = "Alterar",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                Button(
+                                    onClick = onConsultInput,
+                                    enabled = !nfceState.isFetching,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .testTag("nfce_consult_button")
                                 ) {
-                                    OutlinedButton(
-                                        onClick = onOpenPortal,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("nfce_open_portal_button")
-                                    ) {
-                                        Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Portal (${nfceState.selectedPortal.ufSigla})", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            val raw = nfceState.inputQuery.trim()
-                                            val target = if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
-                                                raw
-                                            } else {
-                                                nfceState.selectedPortal.url
-                                            }
-                                            openUrlInExternalBrowser(context, target)
-                                        },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("nfce_tab_open_chrome_button")
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Abrir no Chrome", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
+                                    Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Buscar Itens da Nota")
+                                }
+
+                                TextButton(
+                                    onClick = onOpenPortal,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .testTag("nfce_open_portal_button")
+                                ) {
+                                    Icon(Icons.Rounded.Language, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Abrir site da SEFAZ (${nfceState.selectedPortal.ufSigla}) manualmente")
                                 }
                             }
                         }
                     }
-                }
 
-                2 -> item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, extended.borderSubtle)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, extended.borderSubtle)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.UploadFile,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(44.dp)
-                            )
-                            Text(
-                                text = "Importar Arquivo XML Oficial (NF-e / NFC-e)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                text = "Funciona para notas fiscais de qualquer estado brasileiro. Lê código EAN, descrição, unidade, quantidade e preço unitário diretamente do XML.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            Button(
-                                onClick = { xmlPickerLauncher.launch(arrayOf("text/xml", "application/xml", "*/*")) },
-                                modifier = Modifier.testTag("nfce_import_xml_button")
-                            ) {
-                                Icon(Icons.Rounded.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Selecionar Arquivo .XML")
-                            }
-                        }
-                    }
-                }
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            xmlPickerLauncher.launch(arrayOf("text/xml", "application/xml", "*/*"))
+                                        }
+                                        .padding(16.dp)
+                                        .testTag("nfce_import_xml_button"),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.UploadFile,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Importar arquivo .XML",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Se você baixou o arquivo da nota no celular ou e-mail",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
 
-                else -> item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, extended.borderSubtle)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "Cole os itens do cupom ou texto copiado",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            OutlinedTextField(
-                                value = nfceState.rawReceiptTextInput,
-                                onValueChange = onRawTextChange,
-                                placeholder = {
-                                    Text("Ex:\nARROZ TIO JOAO 5KG  1 un  24,90\nLEITE INTEGRAL 1L  6 un  4,89")
-                                },
-                                minLines = 5,
-                                maxLines = 10,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("nfce_paste_text_input")
-                            )
-                            Button(
-                                onClick = onParseRawText,
-                                enabled = nfceState.rawReceiptTextInput.isNotBlank(),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("nfce_parse_text_button")
-                            ) {
-                                Icon(Icons.Rounded.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Interpretar Itens do Texto")
+                                HorizontalDivider()
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showPasteText = !showPasteText }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ContentPaste,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Colar lista de produtos em texto",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Cole um texto copiado de outra página ou mensagem",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = if (showPasteText) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                        contentDescription = if (showPasteText) "Recolher" else "Expandir"
+                                    )
+                                }
+
+                                AnimatedVisibility(visible = showPasteText || nfceState.rawReceiptTextInput.isNotBlank()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = nfceState.rawReceiptTextInput,
+                                            onValueChange = onRawTextChange,
+                                            placeholder = {
+                                                Text("Ex:\nARROZ 5KG  1 un  24,90\nLEITE 1L  6 un  4,89")
+                                            },
+                                            minLines = 4,
+                                            maxLines = 8,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .testTag("nfce_paste_text_input")
+                                        )
+                                        Button(
+                                            onClick = onParseRawText,
+                                            enabled = nfceState.rawReceiptTextInput.isNotBlank(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(48.dp)
+                                                .testTag("nfce_parse_text_button")
+                                        ) {
+                                            Icon(Icons.Rounded.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Ler Itens do Texto")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -690,7 +675,8 @@ fun NfceImportScreen(
                 selectedCount = selectedCount,
                 onToggleItem = onToggleItem,
                 onSelectItemCategory = onSelectItemCategory,
-                onConfirmImport = onConfirmImport
+                onConfirmImport = onConfirmImport,
+                onDiscardImport = onDiscardImport
             )
 
             item { Spacer(modifier = Modifier.height(32.dp)) }

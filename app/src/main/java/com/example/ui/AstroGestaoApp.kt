@@ -740,7 +740,8 @@ private fun AuthenticatedAstroContent(
                                     viewModel.confirmNfceImport {
                                         navController.popBackStack()
                                     }
-                                }
+                                },
+                                onDiscardImport = viewModel::clearNfceImport
                             )
                         }
                     }

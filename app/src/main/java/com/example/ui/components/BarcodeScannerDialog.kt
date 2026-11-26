@@ -188,12 +188,15 @@ fun BarcodeScannerDialog(
                     }
                 }
 
+                val scannerBackdrop = MaterialTheme.colorScheme.primary
+                val scannerAccent = MaterialTheme.colorScheme.tertiary
+                val scannerInk = MaterialTheme.colorScheme.onPrimary
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(270.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF0B1120)),
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     if (hasCameraPermission && cameraError == null) {
@@ -235,12 +238,12 @@ fun BarcodeScannerDialog(
                                 .fillMaxWidth(0.76f)
                                 .height(130.dp)
                                 .border(
-                                    BorderStroke(2.dp, Color(0xFF818CF8)),
+                                    BorderStroke(2.dp, scannerAccent),
                                     RoundedCornerShape(14.dp)
                                 )
                         )
                         Surface(
-                            color = Color(0xAA0F172A),
+                            color = scannerBackdrop.copy(alpha = 0.85f),
                             shape = RoundedCornerShape(999.dp),
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -249,7 +252,7 @@ fun BarcodeScannerDialog(
                             Text(
                                 text = "Aponte para o código EAN ou QR Code",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
+                                color = scannerInk,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
@@ -262,7 +265,7 @@ fun BarcodeScannerDialog(
                             Icon(
                                 imageVector = Icons.Rounded.CameraAlt,
                                 contentDescription = null,
-                                tint = Color(0xFFA5B4FC),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(38.dp)
                             )
                             Text(
@@ -273,14 +276,14 @@ fun BarcodeScannerDialog(
                                         "Autorize o uso da câmera para bipar os produtos."
                                     },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFE2E8F0),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 textAlign = TextAlign.Center
                             )
                             if (cameraError == null) {
                                 OutlinedButton(
                                     onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }
                                 ) {
-                                    Text("Permitir Câmera", color = Color.White)
+                                    Text("Permitir Câmera")
                                 }
                             }
                         }

@@ -79,6 +79,7 @@ fun FinanceScreen(
                 value = formatBrl(uiState.totalEstimatedValue),
                 subtitle = "${uiState.registeredProductCount} produtos no patrimônio doméstico",
                 containerColor = extended.kpiEmerald,
+                contentColor = extended.kpiEmeraldContent,
                 modifier = Modifier.fillMaxWidth(),
                 testTag = "finance_inventory_value"
             )

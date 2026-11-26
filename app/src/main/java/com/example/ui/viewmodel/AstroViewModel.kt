@@ -857,15 +857,15 @@ class AstroViewModel(
     // ---- IMPORTADOR DE NFC-E / CUPONS FISCAIS ----
 
     fun selectNfceTab(tabIndex: Int) {
-        _nfceState.value = _nfceState.value.copy(activeTab = tabIndex)
+        _nfceState.value = _nfceState.value.copy(activeTab = tabIndex.coerceIn(0, 1))
     }
 
     fun selectRegionalPortal(portal: RegionalPortal) {
-        _nfceState.value = _nfceState.value.copy(
+        val current = _nfceState.value
+        _nfceState.value = current.copy(
             selectedPortal = portal,
-            activePortalUrl = portal.url,
-            showWebPortal = true,
-            statusMessage = "Portal ${portal.label} carregado abaixo."
+            activePortalUrl = SefazPortals.resolvePortalUrl(portal, current.detectedKey),
+            statusMessage = "Estado selecionado: ${portal.label}."
         )
     }
 
@@ -892,7 +892,11 @@ class AstroViewModel(
             storeName = result.storeName ?: _nfceState.value.storeName,
             detectedKey = result.accessKey ?: _nfceState.value.detectedKey,
             parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
-            statusMessage = result.message ?: "Não foi possível identificar itens neste texto. Tente separar nome, quantidade e preço (ex: Arroz 5kg  1 un  24,90)."
+            statusMessage = if (result.items.isNotEmpty()) {
+                "Pronto! Encontramos ${result.items.size} item(ns) no texto."
+            } else {
+                "Não conseguimos separar os produtos. Coloque um item por linha com quantidade e preço (ex: Arroz 5kg  1 un  24,90)."
+            }
         )
     }
 
@@ -900,7 +904,7 @@ class AstroViewModel(
         viewModelScope.launch {
             _nfceState.value = _nfceState.value.copy(
                 isFetching = true,
-                statusMessage = "Analisando foto: procurando QR Code da SEFAZ e fazendo leitura ótica (OCR)..."
+                statusMessage = "Lendo seu cupom fiscal... Aguarde um instante."
             )
 
             val scanResult = runCatching {
@@ -910,7 +914,7 @@ class AstroViewModel(
             if (scanResult == null) {
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
-                    statusMessage = "Não foi possível abrir a imagem selecionada. Tente outra foto mais nítida."
+                    statusMessage = "Não foi possível abrir essa foto. Tente tirar outra imagem com mais luz."
                 )
                 return@launch
             }
@@ -937,7 +941,7 @@ class AstroViewModel(
                                 selectedPortal = portal,
                                 storeName = sefazResult.storeName ?: ocrResult?.storeName,
                                 parsedItems = sefazResult.items.map { it.copy(categoryId = defaultCat) },
-                                statusMessage = "QR Code da SEFAZ (${portal.ufSigla}) lido com sucesso! ${sefazResult.items.size} item(ns) extraído(s)."
+                                statusMessage = "Cupom lido pelo QR Code! Confira os ${sefazResult.items.size} item(ns) abaixo."
                             )
                         }
                         ocrResult != null && ocrResult.items.isNotEmpty() -> {
@@ -949,40 +953,34 @@ class AstroViewModel(
                                 activePortalUrl = safeQrUrl,
                                 storeName = ocrResult.storeName,
                                 parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                                statusMessage = "QR Code (${portal.ufSigla}) detectado e ${ocrResult.items.size} item(ns) extraído(s) via OCR! Confira abaixo ou abra o link oficial da SEFAZ se faltar algum item."
+                                statusMessage = "Lemos ${ocrResult.items.size} item(ns) direto da foto do cupom! Confira abaixo antes de importar."
                             )
                         }
                         else -> {
                             _nfceState.value = _nfceState.value.copy(
                                 isFetching = false,
-                                activeTab = 1,
                                 inputQuery = safeQrUrl,
                                 detectedKey = key,
                                 selectedPortal = portal,
                                 activePortalUrl = safeQrUrl,
                                 showWebPortal = true,
-                                statusMessage = "QR Code (${portal.ufSigla}) detectado! Abrindo a nota no portal SEFAZ abaixo."
+                                statusMessage = "QR Code encontrado (${portal.ufSigla})! Se o site pedir confirmação, resolva na tela que capturamos os itens automaticamente."
                             )
                         }
                     }
                     return@launch
-                } else if (qrRaw.startsWith("http://", ignoreCase = true) || qrRaw.startsWith("https://", ignoreCase = true)) {
-                    _nfceState.value = _nfceState.value.copy(
-                        isFetching = false,
-                        statusMessage = "QR Code ignorado por segurança: apenas links oficiais da SEFAZ (.gov.br) são permitidos."
-                    )
-                    return@launch
                 } else if (key != null) {
+                    val resolvedPortalUrl = SefazPortals.resolvePortalUrl(portal, key)
                     if (ocrResult != null && ocrResult.items.isNotEmpty()) {
                         _nfceState.value = _nfceState.value.copy(
                             isFetching = false,
                             inputQuery = key,
                             detectedKey = key,
                             selectedPortal = portal,
-                            activePortalUrl = portal.url,
+                            activePortalUrl = resolvedPortalUrl,
                             storeName = ocrResult.storeName,
                             parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                            statusMessage = "Chave (${portal.ufSigla}) e ${ocrResult.items.size} item(ns) extraídos via OCR! Confira abaixo."
+                            statusMessage = "Pronto! Lemos ${ocrResult.items.size} item(ns) do seu cupom."
                         )
                     } else {
                         _nfceState.value = _nfceState.value.copy(
@@ -991,32 +989,51 @@ class AstroViewModel(
                             inputQuery = key,
                             detectedKey = key,
                             selectedPortal = portal,
-                            activePortalUrl = portal.url,
+                            activePortalUrl = resolvedPortalUrl,
                             showWebPortal = true,
-                            statusMessage = "Chave (${portal.ufSigla}) detectada! Abrindo o portal da SEFAZ correspondente."
+                            statusMessage = "Número da nota detectado (${portal.ufSigla}). Abrindo a consulta para buscar seus produtos."
                         )
                     }
+                    return@launch
+                } else if (qrRaw.startsWith("http://", ignoreCase = true) || qrRaw.startsWith("https://", ignoreCase = true)) {
+                    if (ocrResult != null && ocrResult.items.isNotEmpty()) {
+                        _nfceState.value = _nfceState.value.copy(
+                            isFetching = false,
+                            storeName = ocrResult.storeName,
+                            detectedKey = ocrResult.accessKey ?: _nfceState.value.detectedKey,
+                            selectedPortal = ocrResult.accessKey?.let { SefazPortals.detectForInput(it) } ?: _nfceState.value.selectedPortal,
+                            parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
+                            statusMessage = "Pronto! Lemos ${ocrResult.items.size} item(ns) direto da foto do cupom."
+                        )
+                        return@launch
+                    }
+                    _nfceState.value = _nfceState.value.copy(
+                        isFetching = false,
+                        statusMessage = "O QR Code lido não era da nota fiscal (ex: Pix ou propaganda). Tente focar apenas na lista de produtos ou no QR Code do cupom."
+                    )
                     return@launch
                 }
             }
 
             if (ocrResult != null && ocrResult.items.isNotEmpty()) {
+                val resolvedPortal = ocrResult.accessKey?.let { SefazPortals.detectForInput(it) } ?: _nfceState.value.selectedPortal
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
                     storeName = ocrResult.storeName,
                     detectedKey = ocrResult.accessKey ?: _nfceState.value.detectedKey,
-                    selectedPortal = ocrResult.accessKey?.let { SefazPortals.detectForInput(it) } ?: _nfceState.value.selectedPortal,
+                    selectedPortal = resolvedPortal,
+                    activePortalUrl = SefazPortals.resolvePortalUrl(resolvedPortal, ocrResult.accessKey),
                     parsedItems = ocrResult.items.map { it.copy(categoryId = defaultCat) },
-                    statusMessage = "Leitura ótica (OCR) concluída! ${ocrResult.items.size} item(ns) identificado(s) no cupom."
+                    statusMessage = "Pronto! Lemos ${ocrResult.items.size} item(ns) do seu cupom."
                 )
             } else {
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
                     rawReceiptTextInput = scanResult.ocrText,
                     statusMessage = if (scanResult.ocrText.isNotBlank()) {
-                        "Lemos o texto da foto, mas não identificamos linhas de itens com preço. Tente aproximar mais a câmera ou edite na aba \"Colar Texto\"."
+                        "A foto ficou um pouco difícil de ler os preços. Tente aproximar mais a câmera da lista de produtos ou use \"Escanear QR Code\"."
                     } else {
-                        "Não foi possível detectar QR Code nem texto legível na foto. Tente outra foto com boa iluminação."
+                        "Não conseguimos ler o QR Code nem os produtos nessa foto. Tente tirar outra foto bem iluminada e reta."
                     }
                 )
             }
@@ -1026,20 +1043,34 @@ class AstroViewModel(
     fun openRegionalPortal() {
         val current = _nfceState.value
         val trimmed = current.inputQuery.trim()
-        val targetUrl = SefazPortals.sanitizeSefazUrl(trimmed) ?: current.selectedPortal.url
+        val key = current.detectedKey ?: SefazPortals.extractAccessKey(trimmed)
+        val portal = if (trimmed.isNotBlank()) SefazPortals.detectForInput(trimmed) else current.selectedPortal
+        val targetUrl = SefazPortals.resolvePortalUrl(portal, key)
         _nfceState.value = current.copy(
+            selectedPortal = portal,
+            detectedKey = key,
             activePortalUrl = targetUrl,
             showWebPortal = true,
-            statusMessage = if (current.detectedKey != null) {
-                "Portal ${current.selectedPortal.ufSigla} aberto. Chave detectada (${current.detectedKey.take(8)}…): toque em \"Preencher Chave\", resolva o CAPTCHA e os itens serão capturados."
+            statusMessage = if (key != null) {
+                "Site da nota aberto (${portal.ufSigla}). A chave já será preenchida; resolva a verificação na tela que capturamos os itens."
             } else {
-                "Consulte a nota no portal ${current.selectedPortal.ufSigla} abaixo e toque em \"Extrair Itens\"."
+                "Site da nota aberto (${portal.ufSigla}). Consulte a nota na página e capturamos os itens automaticamente."
             }
         )
     }
 
     fun dismissWebPortal() {
         _nfceState.value = _nfceState.value.copy(showWebPortal = false)
+    }
+
+    fun clearNfceImport() {
+        val current = _nfceState.value
+        if (current.isImporting) return
+        _nfceState.value = NfceImportState(
+            activeTab = current.activeTab,
+            selectedPortal = current.selectedPortal,
+            statusMessage = "Importação descartada. Você pode ler um novo cupom ou consultar outra nota."
+        )
     }
 
     fun consultNfceInput() {
@@ -1055,7 +1086,7 @@ class AstroViewModel(
                 val defaultCat = uiState.value.categories.firstOrNull()?.id
                 _nfceState.value = _nfceState.value.copy(
                     parsedItems = textResult.items.map { it.copy(categoryId = defaultCat) },
-                    statusMessage = textResult.message
+                    statusMessage = "Pronto! Encontramos ${textResult.items.size} item(ns)."
                 )
                 return
             }
@@ -1067,36 +1098,47 @@ class AstroViewModel(
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
                     showWebPortal = false,
-                    statusMessage = "URL bloqueada por segurança: informe um link oficial da SEFAZ (.gov.br) com HTTPS."
+                    statusMessage = "Este endereço não parece ser de uma nota fiscal oficial (.gov.br). Confira o link ou use a foto do cupom."
                 )
                 return
             }
             viewModelScope.launch {
                 val portal = SefazPortals.detectForInput(safeUrl)
+                val key = SefazPortals.extractAccessKey(safeUrl)
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = true,
                     selectedPortal = portal,
-                    statusMessage = "Consultando SEFAZ (${portal.ufSigla})..."
+                    detectedKey = key ?: _nfceState.value.detectedKey,
+                    statusMessage = "Buscando produtos da sua nota (${portal.ufSigla})..."
                 )
                 val result = withContext(Dispatchers.IO) { NfceParser.fetchAndParseUrl(safeUrl) }
                 val defaultCat = uiState.value.categories.firstOrNull()?.id
+                val resolvedPortalUrl = result.portalUrl?.let { SefazPortals.sanitizeSefazUrl(it) }
+                    ?: SefazPortals.resolvePortalUrl(portal, result.accessKey ?: key, safeUrl)
                 _nfceState.value = _nfceState.value.copy(
                     isFetching = false,
                     storeName = result.storeName,
-                    detectedKey = result.accessKey ?: _nfceState.value.detectedKey,
+                    detectedKey = result.accessKey ?: key ?: _nfceState.value.detectedKey,
                     parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
                     showWebPortal = result.requiresWebPortal || result.items.isEmpty(),
-                    activePortalUrl = result.portalUrl?.let { SefazPortals.sanitizeSefazUrl(it) } ?: portal.url,
-                    statusMessage = result.message
+                    activePortalUrl = resolvedPortalUrl,
+                    statusMessage = if (result.items.isNotEmpty()) {
+                        "Pronto! Encontramos ${result.items.size} item(ns) da sua nota."
+                    } else {
+                        "Abrindo a página da nota (${portal.ufSigla}). Se pedir confirmação, resolva na tela e toque em \"Extrair Itens\"."
+                    }
                 )
             }
         } else {
+            val key = SefazPortals.extractAccessKey(raw)
             val portal = SefazPortals.detectForInput(raw)
+            val targetUrl = SefazPortals.resolvePortalUrl(portal, key)
             _nfceState.value = _nfceState.value.copy(
+                detectedKey = key,
                 selectedPortal = portal,
-                activePortalUrl = portal.url,
+                activePortalUrl = targetUrl,
                 showWebPortal = true,
-                statusMessage = "Estado detectado automaticamente: ${portal.label}. Toque em \"Preencher Chave\", resolva o CAPTCHA e clique em \"Extrair Itens da Página\"."
+                statusMessage = "Abrindo consulta (${portal.ufSigla}). Toque em \"Preencher Chave\", resolva a verificação e toque em \"Extrair Itens\"."
             )
         }
     }
@@ -1115,17 +1157,19 @@ class AstroViewModel(
     }
 
     fun applyWebViewExtractedJson(rawJson: String, isAutoScan: Boolean = false) {
-        val result = NfceParser.parseWebViewJson(rawJson)
+        val result = NfceParser.parseWebViewJson(rawJson, allowRawTextFallback = !isAutoScan)
         val defaultCat = uiState.value.categories.firstOrNull()?.id
         if (result.items.isNotEmpty()) {
             _nfceState.value = _nfceState.value.copy(
                 storeName = result.storeName ?: _nfceState.value.storeName,
                 parsedItems = result.items.map { it.copy(categoryId = defaultCat) },
                 showWebPortal = false,
-                statusMessage = result.message
+                statusMessage = "Pronto! ${result.items.size} item(ns) capturado(s) da nota."
             )
         } else if (!isAutoScan) {
-            _nfceState.value = _nfceState.value.copy(statusMessage = result.message)
+            _nfceState.value = _nfceState.value.copy(
+                statusMessage = "Ainda não vimos os produtos na página. Aguarde os itens aparecerem na tela ou tire uma foto do cupom."
+            )
         }
     }
 
@@ -1146,9 +1190,15 @@ class AstroViewModel(
     }
 
     fun confirmNfceImport(onSuccess: () -> Unit) {
-        val ready = activeReadyState() ?: return
         val state = _nfceState.value
+        if (state.isImporting) return
+        val ready = activeReadyState()
+        if (ready == null) {
+            _snackbarMessages.tryEmit("Aguarde a sincronização com a nuvem terminar antes de importar.")
+            return
+        }
         val defaultCat = uiState.value.categories.firstOrNull()?.id
+        _nfceState.value = state.copy(isImporting = true, statusMessage = "Salvando itens no estoque...")
         viewModelScope.launch {
             repository.importNfceItems(
                 household = ready.household,
@@ -1162,13 +1212,20 @@ class AstroViewModel(
                 onSuccess = { count ->
                     if (count > 0) {
                         _snackbarMessages.tryEmit("$count item(ns) importado(s) da NFC-e na nuvem!")
-                        _nfceState.value = NfceImportState()
+                        _nfceState.value = NfceImportState(selectedPortal = state.selectedPortal)
                         onSuccess()
                     } else {
+                        _nfceState.value = _nfceState.value.copy(isImporting = false)
                         _snackbarMessages.tryEmit("Selecione ao menos um item para importar.")
                     }
                 },
-                onFailure = { emitResultError(it, "Falha ao importar itens do cupom.") }
+                onFailure = {
+                    _nfceState.value = _nfceState.value.copy(
+                        isImporting = false,
+                        statusMessage = "Não foi possível salvar os itens. Confira sua conexão e tente novamente."
+                    )
+                    emitResultError(it, "Falha ao importar itens do cupom.")
+                }
             )
         }
     }

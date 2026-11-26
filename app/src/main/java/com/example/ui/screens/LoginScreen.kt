@@ -82,6 +82,81 @@ import com.example.data.remote.onEmailSignUpClicked
 import com.example.data.remote.onGoogleSignInClicked
 import com.example.data.remote.onSendPasswordResetClicked
 import com.example.ui.components.AstroBrandLogo
+import com.example.ui.theme.AstroTheme
+import com.example.ui.theme.AzulSideralBg
+import com.example.ui.theme.AzulSideralBorder
+import com.example.ui.theme.AzulSideralElevated
+import com.example.ui.theme.AzulSideralSurface
+import com.example.ui.theme.CianoEletrico
+import com.example.ui.theme.IndigoNoturno
+import com.example.ui.theme.IndigoNoturnoDeep
+import com.example.ui.theme.IndigoNoturnoElevated
+import com.example.ui.theme.LilasOrion
+import com.example.ui.theme.LilasOrionContainer
+import com.example.ui.theme.LilasOrionSoft
+import com.example.ui.theme.PessegoClaro
+import com.example.ui.theme.PessegoClaroSoft
+import com.example.ui.theme.PessegoClaroWorkspace
+import com.example.ui.theme.PrataNiquel
+import com.example.ui.theme.PrataNiquelLight
+import com.example.ui.theme.PrataNiquelMuted
+
+private data class LoginPalette(
+    val bgOuter: Color,
+    val bgMid: Color,
+    val cardBg: Color,
+    val cardBorder: Color,
+    val wellBg: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val textMuted: Color,
+    val accent: Color,
+    val accentSoft: Color,
+    val onAccent: Color,
+    val accentDisabledBg: Color,
+    val secondaryCard: Color,
+    val onSecondaryCard: Color
+)
+
+@Composable
+private fun rememberLoginPalette(): LoginPalette {
+    val isDark = AstroTheme.extended.isDark
+    return if (isDark) {
+        LoginPalette(
+            bgOuter = AzulSideralBg,
+            bgMid = AzulSideralSurface,
+            cardBg = AzulSideralSurface,
+            cardBorder = AzulSideralBorder,
+            wellBg = AzulSideralBg,
+            textPrimary = PrataNiquelLight,
+            textSecondary = PrataNiquel,
+            textMuted = PrataNiquelMuted,
+            accent = LilasOrion,
+            accentSoft = LilasOrionSoft,
+            onAccent = AzulSideralBg,
+            accentDisabledBg = LilasOrionContainer,
+            secondaryCard = PrataNiquel,
+            onSecondaryCard = AzulSideralBg
+        )
+    } else {
+        LoginPalette(
+            bgOuter = IndigoNoturnoDeep,
+            bgMid = IndigoNoturno,
+            cardBg = IndigoNoturno,
+            cardBorder = PessegoClaro.copy(alpha = 0.25f),
+            wellBg = IndigoNoturnoDeep,
+            textPrimary = PessegoClaroWorkspace,
+            textSecondary = PessegoClaro,
+            textMuted = PessegoClaro.copy(alpha = 0.72f),
+            accent = CianoEletrico,
+            accentSoft = CianoEletrico,
+            onAccent = IndigoNoturno,
+            accentDisabledBg = IndigoNoturnoElevated,
+            secondaryCard = PessegoClaro,
+            onSecondaryCard = IndigoNoturno
+        )
+    }
+}
 
 private enum class EmailAuthMode {
     SIGN_IN,
@@ -154,12 +229,14 @@ fun LoginScreen(
         }
     }
 
+    val palette = rememberLoginPalette()
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFF0A0E24), Color(0xFF131936), Color(0xFF090D1D))
+                    colors = listOf(palette.bgOuter, palette.bgMid, palette.bgOuter)
                 )
             )
             .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -179,8 +256,8 @@ fun LoginScreen(
                     .widthIn(max = 940.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1326)),
-                border = BorderStroke(1.dp, Color(0xFF283058)),
+                colors = CardDefaults.cardColors(containerColor = palette.cardBg),
+                border = BorderStroke(1.dp, palette.cardBorder),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
                 val formPanel: @Composable (Modifier) -> Unit = { formMod ->
@@ -278,6 +355,7 @@ fun LoginScreen(
 
 @Composable
 private fun CosmicPromoPanel(modifier: Modifier = Modifier) {
+    val palette = rememberLoginPalette()
     Box(modifier = modifier) {
         Image(
             painter = painterResource(id = R.drawable.img_astro_hero),
@@ -291,9 +369,9 @@ private fun CosmicPromoPanel(modifier: Modifier = Modifier) {
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            Color(0xD92E1065),
-                            Color(0xB3312E81),
-                            Color(0xAA0F172A)
+                            palette.bgOuter.copy(alpha = 0.88f),
+                            palette.bgMid.copy(alpha = 0.78f),
+                            palette.bgOuter.copy(alpha = 0.85f)
                         )
                     )
                 )
@@ -312,7 +390,7 @@ private fun CosmicPromoPanel(modifier: Modifier = Modifier) {
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
+                    color = palette.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -321,18 +399,18 @@ private fun CosmicPromoPanel(modifier: Modifier = Modifier) {
                 Text(
                     text = stringResource(R.string.login_eyebrow),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFA5B4FC)
+                    color = palette.accentSoft
                 )
                 Text(
                     text = stringResource(R.string.login_headline),
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
+                    color = palette.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = stringResource(R.string.login_subheadline),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFCBD5E1)
+                    color = palette.textSecondary
                 )
             }
         }
@@ -365,18 +443,19 @@ private fun DualAuthPanel(
     onGoogleClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = rememberLoginPalette()
     val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedBorderColor = Color(0xFF818CF8),
-        unfocusedBorderColor = Color(0xFF334155),
-        focusedLabelColor = Color(0xFFA5B4FC),
-        unfocusedLabelColor = Color(0xFF94A3B8),
-        focusedLeadingIconColor = Color(0xFFA5B4FC),
-        unfocusedLeadingIconColor = Color(0xFF94A3B8),
-        focusedTrailingIconColor = Color(0xFFA5B4FC),
-        unfocusedTrailingIconColor = Color(0xFF94A3B8),
-        cursorColor = Color(0xFF818CF8)
+        focusedTextColor = palette.textPrimary,
+        unfocusedTextColor = palette.textPrimary,
+        focusedBorderColor = palette.accent,
+        unfocusedBorderColor = palette.cardBorder,
+        focusedLabelColor = palette.accentSoft,
+        unfocusedLabelColor = palette.textMuted,
+        focusedLeadingIconColor = palette.accentSoft,
+        unfocusedLeadingIconColor = palette.textMuted,
+        focusedTrailingIconColor = palette.accentSoft,
+        unfocusedTrailingIconColor = palette.textMuted,
+        cursorColor = palette.accent
     )
 
     Column(
@@ -386,25 +465,25 @@ private fun DualAuthPanel(
         Text(
             text = stringResource(R.string.login_welcome_tag),
             style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF818CF8)
+            color = palette.accentSoft
         )
         Text(
             text = stringResource(R.string.login_title),
             style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
+            color = palette.textPrimary,
             fontWeight = FontWeight.Bold
         )
         Text(
             text = stringResource(R.string.login_subtitle),
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF94A3B8)
+            color = palette.textMuted
         )
 
         if (!sessionNotice.isNullOrBlank()) {
             Surface(
-                color = Color(0x33F59E0B),
+                color = palette.secondaryCard.copy(alpha = 0.16f),
                 shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0x88FBBF24))
+                border = BorderStroke(1.dp, palette.secondaryCard.copy(alpha = 0.55f))
             ) {
                 Row(
                     modifier = Modifier
@@ -416,13 +495,13 @@ private fun DualAuthPanel(
                     Icon(
                         imageVector = Icons.Rounded.Schedule,
                         contentDescription = null,
-                        tint = Color(0xFFFCD34D),
+                        tint = palette.secondaryCard,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
                         text = sessionNotice,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFFEF3C7),
+                        color = palette.textPrimary,
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
@@ -432,7 +511,7 @@ private fun DualAuthPanel(
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = stringResource(R.string.action_cancel),
-                            tint = Color(0xFFFDE68A),
+                            tint = palette.secondaryCard,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -442,9 +521,9 @@ private fun DualAuthPanel(
 
         // Mode switcher: Entrar vs Criar Conta
         Surface(
-            color = Color(0xFF171D38),
+            color = palette.wellBg,
             shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, Color(0xFF283058)),
+            border = BorderStroke(1.dp, palette.cardBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -589,7 +668,7 @@ private fun DualAuthPanel(
                 ) {
                     Text(
                         text = stringResource(R.string.action_forgot_password),
-                        color = Color(0xFFA5B4FC),
+                        color = palette.accentSoft,
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
@@ -598,14 +677,14 @@ private fun DualAuthPanel(
 
         if (errorMessage != null) {
             Surface(
-                color = Color(0x33FB7185),
+                color = palette.secondaryCard.copy(alpha = 0.16f),
                 shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0x66FB7185))
+                border = BorderStroke(1.dp, palette.secondaryCard.copy(alpha = 0.5f))
             ) {
                 Text(
                     text = errorMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFFDA4AF),
+                    color = palette.textSecondary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp)
@@ -615,9 +694,9 @@ private fun DualAuthPanel(
 
         if (infoMessage != null) {
             Surface(
-                color = Color(0x3310B981),
+                color = palette.accent.copy(alpha = 0.16f),
                 shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color(0x6634D399))
+                border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.55f))
             ) {
                 Row(
                     modifier = Modifier
@@ -629,13 +708,13 @@ private fun DualAuthPanel(
                     Icon(
                         imageVector = Icons.Rounded.CloudDone,
                         contentDescription = null,
-                        tint = Color(0xFF6EE7B7),
+                        tint = palette.accentSoft,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
                         text = infoMessage,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFD1FAE5)
+                        color = palette.textPrimary
                     )
                 }
             }
@@ -646,10 +725,10 @@ private fun DualAuthPanel(
             enabled = !isBusy,
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF4F46E5),
-                contentColor = Color.White,
-                disabledContainerColor = Color(0xFF312E81),
-                disabledContentColor = Color(0xFFA5B4FC)
+                containerColor = palette.accent,
+                contentColor = palette.onAccent,
+                disabledContainerColor = palette.accentDisabledBg,
+                disabledContentColor = palette.textMuted
             ),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
             modifier = Modifier
@@ -660,7 +739,7 @@ private fun DualAuthPanel(
             if (isEmailBusy) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
-                    color = Color.White,
+                    color = palette.onAccent,
                     strokeWidth = 2.5.dp
                 )
                 Spacer(modifier = Modifier.width(10.dp))
@@ -686,13 +765,13 @@ private fun DualAuthPanel(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFF283058))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = palette.cardBorder)
             Text(
                 text = stringResource(R.string.login_divider_or),
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF94A3B8)
+                color = palette.textMuted
             )
-            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFF283058))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = palette.cardBorder)
         }
 
         Button(
@@ -700,10 +779,10 @@ private fun DualAuthPanel(
             enabled = !isBusy,
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color(0xFF0F172A),
-                disabledContainerColor = Color(0xFFE2E8F0),
-                disabledContentColor = Color(0xFF475569)
+                containerColor = palette.secondaryCard,
+                contentColor = palette.onSecondaryCard,
+                disabledContainerColor = palette.secondaryCard.copy(alpha = 0.5f),
+                disabledContentColor = palette.onSecondaryCard.copy(alpha = 0.6f)
             ),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
             modifier = Modifier
@@ -714,7 +793,7 @@ private fun DualAuthPanel(
             if (isGoogleBusy) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
-                    color = Color(0xFF4F46E5),
+                    color = palette.onSecondaryCard,
                     strokeWidth = 2.5.dp
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -727,14 +806,14 @@ private fun DualAuthPanel(
                 Box(
                     modifier = Modifier
                         .size(26.dp)
-                        .background(Color(0xFFEEF2FF), CircleShape),
+                        .background(palette.onSecondaryCard.copy(alpha = 0.12f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "G",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF4F46E5)
+                        color = palette.onSecondaryCard
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -749,7 +828,7 @@ private fun DualAuthPanel(
         Text(
             text = stringResource(R.string.login_footer_note),
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF64748B)
+            color = palette.textMuted
         )
     }
 }
@@ -762,15 +841,16 @@ private fun AuthModeTabButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = rememberLoginPalette()
     Button(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(9.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(0xFF4F46E5) else Color.Transparent,
-            contentColor = if (selected) Color.White else Color(0xFF94A3B8),
-            disabledContainerColor = if (selected) Color(0xFF312E81) else Color.Transparent,
-            disabledContentColor = Color(0xFF64748B)
+            containerColor = if (selected) palette.accent else Color.Transparent,
+            contentColor = if (selected) palette.onAccent else palette.textMuted,
+            disabledContainerColor = if (selected) palette.accentDisabledBg else Color.Transparent,
+            disabledContentColor = palette.textMuted
         ),
         elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
         contentPadding = PaddingValues(vertical = 10.dp),

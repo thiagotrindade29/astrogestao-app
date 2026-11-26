@@ -22,3 +22,8 @@ google-services*.json
 .env
 .env.*
 !.env.example
+
+# Unused chat screenshots, receipt samples & workflow log attachments
+public/assets/aistudio/
+*.log.txt
+

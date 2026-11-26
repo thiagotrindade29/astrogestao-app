@@ -43,9 +43,14 @@ object ReceiptImageProcessor {
                 .addOnSuccessListener { barcodes ->
                     val prioritized = barcodes
                         .mapNotNull { it.rawValue?.trim()?.takeIf { v -> v.isNotBlank() } }
-                        .sortedByDescending {
-                            it.startsWith("http://", ignoreCase = true) ||
-                                it.startsWith("https://", ignoreCase = true)
+                        .sortedByDescending { value ->
+                            when {
+                                SefazPortals.sanitizeSefazUrl(value) != null -> 3
+                                SefazPortals.extractAccessKey(value) != null -> 2
+                                value.startsWith("http://", ignoreCase = true) ||
+                                    value.startsWith("https://", ignoreCase = true) -> 1
+                                else -> 0
+                            }
                         }
                         .firstOrNull()
                     scanner.close()

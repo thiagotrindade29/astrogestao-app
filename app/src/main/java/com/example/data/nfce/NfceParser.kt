@@ -355,7 +355,7 @@ object NfceParser {
         )
     }
 
-    fun parseWebViewJson(rawResult: String): NfceParseResult {
+    fun parseWebViewJson(rawResult: String, allowRawTextFallback: Boolean = true): NfceParseResult {
         val cleaned = rawResult.trim()
         if (cleaned.isBlank() || cleaned == "null" || cleaned == "\"\"") {
             return NfceParseResult(message = "Nenhum item encontrado nesta página ainda.")
@@ -367,7 +367,12 @@ object NfceParser {
                 cleaned
             }
             val obj = JSONObject(unwrapped)
-            val storeName = obj.optString("store").takeIf { it.isNotBlank() }
+            val rawStore = obj.optString("store").trim()
+            val storeName = rawStore.takeIf {
+                it.isNotBlank() &&
+                    !it.contains("documento auxiliar", ignoreCase = true) &&
+                    !it.contains("danfe", ignoreCase = true)
+            }
             val array: JSONArray = obj.optJSONArray("items") ?: JSONArray()
             val items = buildList {
                 for (i in 0 until array.length()) {
@@ -393,7 +398,7 @@ object NfceParser {
                     message = "${items.size} item(ns) extraído(s) do portal SEFAZ!"
                 )
             } else {
-                val bodyText = obj.optString("rawText")
+                val bodyText = if (allowRawTextFallback) obj.optString("rawText") else ""
                 if (bodyText.isNotBlank()) {
                     val ocrFallback = parseOcrReceiptText(bodyText)
                     if (ocrFallback.items.isNotEmpty()) {
@@ -413,10 +418,10 @@ object NfceParser {
     }
 
     fun parseOcrReceiptText(rawText: String): NfceParseResult {
-        val decimalSpaceFixRegex = Regex("(\\d)\\s*,\\s*(\\d{2,4})")
+        val decimalSpaceFixRegex = Regex("(\\d)\\s*([,.])\\s*(\\d{2,4})")
         val lines = rawText.lines()
             .map { raw ->
-                decimalSpaceFixRegex.replace(raw.trim().replace(Regex("\\s+"), " "), "$1,$2")
+                decimalSpaceFixRegex.replace(raw.trim().replace(Regex("\\s+"), " "), "$1$2$3")
             }
             .filter { it.isNotBlank() }
 
@@ -424,9 +429,10 @@ object NfceParser {
         val detectedPortal = accessKey?.let { SefazPortals.detectForInput(it) }
 
         val storeKeywords = listOf(
-            "supermercado", "mercado", "atacad", "comercial", "padaria", "farmacia",
-            "drogaria", "hiper", "ltda", "s/a", "angeloni", "bistek", "giassi",
-            "fort", "carrefour", "assaí", "assai", "koch", "muffato", "condor", "imperatriz", "cooper"
+            "supermercado", "mercado", "atacad", "comercial", "padaria", "panificadora",
+            "acougue", "açougue", "farmacia", "drogaria", "hiper", "ltda", "s/a",
+            "angeloni", "bistek", "giassi", "fort", "carrefour", "assaí", "assai",
+            "koch", "muffato", "condor", "imperatriz", "cooper"
         )
         val storeName = lines.take(10).firstOrNull { line ->
             val low = line.lowercase()
@@ -437,11 +443,12 @@ object NfceParser {
 
         val ignoreTokens = listOf(
             "cnpj", "insc.", "ie:", "im:", "danfe", "documento auxiliar", "consumidor",
-            "subtotal", "valor total", "total a pagar", "valor pago", "troco", "desconto",
+            "subtotal", "valor total", "total a pagar", "valor a pagar", "valor pago", "troco", "desconto",
             "acrescimo", "cartao", "crédito", "credito", "débito", "debito", "pix", "dinheiro",
-            "forma pagamento", "tributos", "lei 12.741", "consulte pela chave", "chave de acesso",
-            "protocolo", "procon", "serie", "extrato", "qtd. total", "qtde. total", "vl. total",
-            "codigo descricao", "código descrição", "item codigo"
+            "forma pagamento", "forma de pagamento", "tributos", "lei 12.741", "lei federal",
+            "consulte pela chave", "chave de acesso", "protocolo", "procon", "serie", "extrato",
+            "qtd. total", "qtde. total", "vl. total", "codigo descricao", "código descrição",
+            "item codigo", "operador:", "troca mediante", "obrigado pela", "nfc-e no", "nfc-e nº"
         )
 
         fun isNoiseLine(line: String): Boolean {
@@ -460,25 +467,29 @@ object NfceParser {
             RegexOption.IGNORE_CASE
         )
         val qtyTimesPriceRegex = Regex(
-            "^([0-9]+[.,]?[0-9]*)\\s*$unitPattern?\\s*[xX*]\\s*(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s*=.*|\\s+[0-9]+,[0-9]{2}.*)?$",
+            "^([0-9]+[.,]?[0-9]*)\\s*$unitPattern?\\s*[xX*]\\s*(?:R\\$)?\\s*([0-9]+[.,][0-9]{2})(?:\\s*=.*|\\s+[0-9]+[.,][0-9]{2}.*)?$",
+            RegexOption.IGNORE_CASE
+        )
+        val pendingQtyUnitPricesRegex = Regex(
+            "^([0-9]+[.,]?[0-9]*)\\s*$unitPattern\\s+(?:R\\$\\s*)?([0-9]+[.,][0-9]{2})(?:\\s+(?:R\\$\\s*)?([0-9]+[.,][0-9]{2}))?(?:\\s+[A-Z0-9%]{1,5})?$",
             RegexOption.IGNORE_CASE
         )
         val sefazCodeSuffixRegex = Regex("\\(C[oó]digo:\\s*([^)]+)\\)", RegexOption.IGNORE_CASE)
-        val priceTokenRegex = Regex("(?:R\\$\\s*)?([0-9]{1,4}(?:\\.[0-9]{3})*,[0-9]{2})")
+        val priceTokenRegex = Regex("(?:R\\$\\s*)?([0-9]{1,4}(?:\\.[0-9]{3})*[.,][0-9]{2})")
         val inlineItemWithOperatorRegex = Regex(
-            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s*$unitPattern\\s+[xX*]\\s*(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s+(?:R\\$)?\\s*[0-9]+,[0-9]{2})?(?:\\s+[A-Z0-9%]{1,5})?$",
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s*$unitPattern\\s+[xX*]\\s*(?:R\\$)?\\s*([0-9]+[.,][0-9]{2})(?:\\s+(?:R\\$)?\\s*[0-9]+[.,][0-9]{2})?(?:\\s+[A-Z0-9%]{1,5})?$",
             RegexOption.IGNORE_CASE
         )
         val inlineItemTwoPricesRegex = Regex(
-            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s+$unitPattern\\s+(?:R\\$)?\\s*([0-9]+,[0-9]{2})\\s+(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$",
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s+$unitPattern\\s+(?:R\\$)?\\s*([0-9]+[.,][0-9]{2})\\s+(?:R\\$)?\\s*([0-9]+[.,][0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$",
             RegexOption.IGNORE_CASE
         )
         val descQtyTotalRegex = Regex(
-            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s+$unitPattern\\s+(?:R\\$)?\\s*([0-9]+,[0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$",
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+([0-9]+[.,]?[0-9]*)\\s+$unitPattern\\s+(?:R\\$)?\\s*([0-9]+[.,][0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$",
             RegexOption.IGNORE_CASE
         )
         val descPlusPriceRegex = Regex(
-            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+(?:R\\$\\s*)?([0-9]+,[0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$"
+            "^(?:\\d{1,4}\\s+)?(?:(\\d{4,14})\\s+)?(.+?)\\s+(?:R\\$\\s*)?([0-9]+[.,][0-9]{2})(?:\\s+[A-Z0-9%]{1,5})?$"
         )
 
         val items = mutableListOf<ParsedNfceItem>()
@@ -489,6 +500,8 @@ object NfceParser {
             val suffixCode = sefazCodeSuffixRegex.find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
             val clean = sefazCodeSuffixRegex.replace(raw, "")
                 .replace(Regex("^\\d{1,3}\\s*[-.)]\\s*"), "")
+                .replace(Regex("\\s*\\\\{1,2}\\s*"), " / ")
+                .replace(Regex("\\s+"), " ")
                 .trim()
             return suffixCode to clean
         }
@@ -531,6 +544,33 @@ object NfceParser {
                 val qty = parseDecimal(qMatch.groupValues[1]) ?: 1.0
                 val unit = normalizeUnit(qMatch.groupValues[2].ifBlank { "un" })
                 val unitPrice = parseDecimal(qMatch.groupValues[3]) ?: 0.0
+                items.add(
+                    ParsedNfceItem(
+                        code = pendingCode,
+                        name = pendingName,
+                        unit = unit,
+                        quantity = qty.coerceAtLeast(0.01),
+                        unitPrice = unitPrice.coerceAtLeast(0.0)
+                    )
+                )
+                clearPending()
+                continue
+            }
+
+            // Segunda linha sem operador 'x': "1,000 UN 7,00 7,00" ou "0,170 kg 4,59"
+            val pendingDetails = pendingQtyUnitPricesRegex.find(line)
+            if (pendingDetails != null && pendingName.isNotBlank()) {
+                val qty = parseDecimal(pendingDetails.groupValues[1]) ?: 1.0
+                val unit = normalizeUnit(pendingDetails.groupValues[2].ifBlank { "un" })
+                val firstPrice = parseDecimal(pendingDetails.groupValues[3]) ?: 0.0
+                val secondPrice = parseDecimal(pendingDetails.groupValues[4].takeIf { it.isNotBlank() })
+                val unitPrice = if (secondPrice != null) {
+                    firstPrice
+                } else if (qty > 0.0) {
+                    firstPrice / qty
+                } else {
+                    firstPrice
+                }
                 items.add(
                     ParsedNfceItem(
                         code = pendingCode,

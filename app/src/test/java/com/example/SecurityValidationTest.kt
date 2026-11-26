@@ -21,6 +21,13 @@ class SecurityValidationTest {
             "https://www.fazenda.pr.gov.br/nfce/consulta?p=123",
             SefazPortals.sanitizeSefazUrl(legacyHttpGov)
         )
+
+        val scQrV2WithPipes =
+            "https://sat.sef.sc.gov.br/nfce/consulta?p=42261144907858000100651040000489121436426346|2|1|1|ABCDEF0123456789"
+        assertEquals(
+            "https://sat.sef.sc.gov.br/nfce/consulta?p=42261144907858000100651040000489121436426346%7C2%7C1%7C1%7CABCDEF0123456789",
+            SefazPortals.sanitizeSefazUrl(scQrV2WithPipes)
+        )
     }
 
     @Test
@@ -39,6 +46,11 @@ class SecurityValidationTest {
     @Test
     fun `webview navigation allows only https external non-private hosts`() {
         assertTrue(SefazPortals.isAllowedWebViewNavigationUrl("https://sat.sef.sc.gov.br/consulta"))
+        assertTrue(
+            SefazPortals.isAllowedWebViewNavigationUrl(
+                "https://sat.sef.sc.gov.br/nfce/consulta?p=42261144907858000100651040000489121436426346|2|1|1|HASH"
+            )
+        )
         assertFalse(SefazPortals.isAllowedWebViewNavigationUrl("http://sat.sef.sc.gov.br/consulta"))
         assertFalse(SefazPortals.isAllowedWebViewNavigationUrl("file:///data/data/com.example/files/a"))
         assertFalse(SefazPortals.isAllowedWebViewNavigationUrl("content://com.example/secret"))

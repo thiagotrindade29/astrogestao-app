@@ -5,11 +5,16 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -26,12 +31,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -39,16 +47,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,11 +68,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +95,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.R
+import com.example.data.nfce.RegionalPortal
 import com.example.data.nfce.SefazPortals
 import com.example.data.repository.ProductMatcher
 import com.example.ui.components.formatBrl
@@ -87,6 +104,7 @@ import com.example.ui.theme.AstroTheme
 import com.example.ui.theme.JetBrainsMonoFamily
 import com.example.ui.viewmodel.AstroUiState
 import com.example.ui.viewmodel.NfceImportState
+import kotlinx.coroutines.delay
 
 internal fun openUrlInExternalBrowser(context: android.content.Context, url: String) {
     val safeUrl = SefazPortals.sanitizeSefazUrl(url)
@@ -100,6 +118,19 @@ internal fun openUrlInExternalBrowser(context: android.content.Context, url: Str
     }
 }
 
+private fun isProbablyEmulator(): Boolean {
+    return Build.FINGERPRINT.startsWith("generic") ||
+        Build.FINGERPRINT.startsWith("unknown") ||
+        Build.MODEL.contains("google_sdk") ||
+        Build.MODEL.contains("Emulator") ||
+        Build.MODEL.contains("Android SDK built for x86") ||
+        Build.MANUFACTURER.contains("Genymotion") ||
+        (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")) ||
+        Build.PRODUCT == "google_sdk" ||
+        Build.HARDWARE.contains("goldfish") ||
+        Build.HARDWARE.contains("ranchu")
+}
+
 @Composable
 internal fun NfceImageSourceDialog(
     onPickGallery: () -> Unit,
@@ -110,7 +141,7 @@ internal fun NfceImageSourceDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Foto ou Print do Cupom",
+                text = "Enviar Foto do Cupom",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -118,10 +149,30 @@ internal fun NfceImageSourceDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "O sistema detectará automaticamente o QR Code da SEFAZ ou fará leitura ótica (OCR) dos itens impressos.",
+                    text = "Lemos o QR Code ou a lista de produtos impressa automaticamente.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onTakePhoto)
+                        .testTag("nfce_take_photo_option"),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column {
+                            Text("Tirar Foto Agora", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("Use a câmera no cupom de papel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -137,28 +188,97 @@ internal fun NfceImageSourceDialog(
                     ) {
                         Icon(Icons.Rounded.PhotoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Column {
-                            Text("Escolher da Galeria / Print", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text("Selecione foto ou print do cupom fiscal", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Escolher da Galeria", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("Selecione uma foto ou print salvo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
-                Card(
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+internal fun NfceStatePickerDialog(
+    selectedPortal: RegionalPortal,
+    onSelectPortal: (RegionalPortal) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var search by remember { mutableStateOf("") }
+    val filteredPortals = remember(search) {
+        val q = search.trim().lowercase()
+        if (q.isEmpty()) SefazPortals.allPortals
+        else SefazPortals.allPortals.filter {
+            it.label.lowercase().contains(q) || it.ufSigla.lowercase().contains(q)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Escolha o Estado da Nota",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    placeholder = { Text("Buscar estado (ex: SC, SP, PR)...") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(onClick = onTakePhoto)
-                        .testTag("nfce_take_photo_option"),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .heightIn(max = 320.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Rounded.CameraAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column {
-                            Text("Tirar Foto Agora", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text("Fotografe o cupom fiscal de papel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    items(filteredPortals, key = { it.ufCode }) { portal ->
+                        val isSelected = portal.ufCode == selectedPortal.ufCode
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelectPortal(portal)
+                                    onDismiss()
+                                }
+                                .testTag("portal_chip_${portal.ufCode}")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = portal.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = "Selecionado",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -183,8 +303,44 @@ internal fun NfcePortalWebViewDialog(
     val context = LocalContext.current
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var webProgress by remember { mutableIntStateOf(0) }
-    var currentUrl by remember(nfceState.activePortalUrl) { mutableStateOf(nfceState.activePortalUrl) }
-    var webErrorMessage by remember(nfceState.activePortalUrl) { mutableStateOf<String?>(null) }
+    var retryAttempt by remember { mutableIntStateOf(0) }
+    var rendererCrashed by remember { mutableStateOf(false) }
+    var forceSoftwareLayer by remember { mutableStateOf(isProbablyEmulator()) }
+    val resolvedFallbackUrl = remember(nfceState.selectedPortal, nfceState.detectedKey, nfceState.activePortalUrl) {
+        SefazPortals.resolvePortalUrl(nfceState.selectedPortal, nfceState.detectedKey, nfceState.activePortalUrl)
+    }
+    var currentUrl by remember(resolvedFallbackUrl) { mutableStateOf(resolvedFallbackUrl) }
+    var lastLoadedUrl by remember(resolvedFallbackUrl, retryAttempt) { mutableStateOf("") }
+    var webErrorMessage by remember(resolvedFallbackUrl, retryAttempt) { mutableStateOf<String?>(null) }
+
+    DisposableEffect(retryAttempt) {
+        onDispose {
+            webViewRef?.let { wv ->
+                runCatching {
+                    wv.stopLoading()
+                    wv.loadUrl("about:blank")
+                    wv.clearHistory()
+                    (wv.parent as? ViewGroup)?.removeView(wv)
+                    wv.removeAllViews()
+                    wv.destroy()
+                }
+            }
+            webViewRef = null
+        }
+    }
+
+    LaunchedEffect(resolvedFallbackUrl, retryAttempt, rendererCrashed) {
+        while (!rendererCrashed) {
+            delay(1200L)
+            if (webErrorMessage == null) {
+                webViewRef?.evaluateJavascript(SefazPortals.WEBVIEW_EXTRACTION_JS) { raw ->
+                    if (!raw.isNullOrBlank()) {
+                        onWebViewExtracted(raw, true)
+                    }
+                }
+            }
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -210,21 +366,21 @@ internal fun NfcePortalWebViewDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = nfceState.selectedPortal.label,
+                            text = "Site Oficial (${nfceState.selectedPortal.ufSigla})",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = currentUrl.ifBlank { nfceState.selectedPortal.url },
+                            text = "Resolva a confirmação. Capturamos os itens automático!",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    if (nfceState.detectedKey != null) {
+                    if (nfceState.detectedKey != null && !rendererCrashed) {
                         OutlinedButton(
                             onClick = {
                                 webViewRef?.evaluateJavascript(
@@ -232,27 +388,14 @@ internal fun NfcePortalWebViewDialog(
                                     null
                                 )
                             },
+                            enabled = webViewRef != null,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = stringResource(R.string.nfce_fill_key),
+                                text = "Colar Chave",
                                 style = MaterialTheme.typography.labelMedium
                             )
                         }
-                    }
-                    IconButton(
-                        onClick = {
-                            openUrlInExternalBrowser(
-                                context = context,
-                                url = currentUrl.ifBlank { nfceState.selectedPortal.url }
-                            )
-                        },
-                        modifier = Modifier.testTag("nfce_header_chrome_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
-                            contentDescription = "Abrir no Navegador"
-                        )
                     }
                     IconButton(
                         onClick = onDismiss,
@@ -279,107 +422,172 @@ internal fun NfcePortalWebViewDialog(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                val cm = CookieManager.getInstance()
-                                cm.setAcceptCookie(true)
-                                cm.setAcceptThirdPartyCookies(this, false)
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.javaScriptCanOpenWindowsAutomatically = false
-                                settings.setSupportMultipleWindows(false)
-                                settings.allowFileAccess = false
-                                settings.allowContentAccess = false
-                                @Suppress("DEPRECATION")
-                                settings.allowFileAccessFromFileURLs = false
-                                @Suppress("DEPRECATION")
-                                settings.allowUniversalAccessFromFileURLs = false
-                                settings.safeBrowsingEnabled = true
-                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                                settings.builtInZoomControls = true
-                                settings.displayZoomControls = false
-                                settings.loadWithOverviewMode = true
-                                settings.useWideViewPort = true
-                                settings.userAgentString =
-                                    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-                                webViewClient = object : WebViewClient() {
-                                    override fun shouldOverrideUrlLoading(
-                                        view: WebView?,
-                                        request: WebResourceRequest?
-                                    ): Boolean {
-                                        val reqUrl = request?.url?.toString().orEmpty()
-                                        return !SefazPortals.isAllowedWebViewNavigationUrl(reqUrl)
-                                    }
+                    if (!rendererCrashed) {
+                        key(retryAttempt) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    WebView(ctx).apply {
+                                        // Em aparelhos reais mantém aceleração por hardware (evita tela branca em CSS/CAPTCHA);
+                                        // em emuladores ou após crash de rendernode usa camada de software.
+                                        setLayerType(
+                                            if (forceSoftwareLayer) View.LAYER_TYPE_SOFTWARE else View.LAYER_TYPE_NONE,
+                                            null
+                                        )
+                                        runCatching {
+                                            setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+                                        }
+                                        val cm = CookieManager.getInstance()
+                                        cm.setAcceptCookie(true)
+                                        // Necessário para iframes de reCAPTCHA / hCaptcha e sessões cruzadas da SEFAZ
+                                        cm.setAcceptThirdPartyCookies(this, true)
+                                        settings.javaScriptEnabled = true
+                                        settings.domStorageEnabled = true
+                                        settings.databaseEnabled = true
+                                        settings.javaScriptCanOpenWindowsAutomatically = false
+                                        settings.setSupportMultipleWindows(false)
+                                        settings.allowFileAccess = false
+                                        settings.allowContentAccess = false
+                                        @Suppress("DEPRECATION")
+                                        settings.allowFileAccessFromFileURLs = false
+                                        @Suppress("DEPRECATION")
+                                        settings.allowUniversalAccessFromFileURLs = false
+                                        settings.safeBrowsingEnabled = false
+                                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                                        settings.builtInZoomControls = true
+                                        settings.displayZoomControls = false
+                                        settings.loadWithOverviewMode = true
+                                        settings.useWideViewPort = true
+                                        val defaultUa = settings.userAgentString.orEmpty()
+                                        if (defaultUa.isNotBlank()) {
+                                            settings.userAgentString = defaultUa.replace("; wv)", ")")
+                                        }
+                                        webViewClient = object : WebViewClient() {
+                                            override fun shouldOverrideUrlLoading(
+                                                view: WebView?,
+                                                request: WebResourceRequest?
+                                            ): Boolean {
+                                                val reqUrl = request?.url?.toString().orEmpty()
+                                                if (SefazPortals.isAllowedWebViewNavigationUrl(reqUrl)) {
+                                                    return false
+                                                }
+                                                val upgraded = SefazPortals.upgradeGovHttpRedirect(reqUrl)
+                                                if (upgraded != null && request?.isForMainFrame == true) {
+                                                    view?.loadUrl(upgraded)
+                                                }
+                                                return true
+                                            }
 
-                                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                        super.onPageStarted(view, url, favicon)
-                                        webErrorMessage = null
-                                        if (!url.isNullOrBlank()) {
-                                            currentUrl = url
-                                        }
-                                    }
+                                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                                super.onPageStarted(view, url, favicon)
+                                                webErrorMessage = null
+                                                if (!url.isNullOrBlank()) {
+                                                    currentUrl = url
+                                                }
+                                            }
 
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        super.onPageFinished(view, url)
-                                        if (!url.isNullOrBlank()) {
-                                            currentUrl = url
-                                        }
-                                        nfceState.detectedKey?.let { key ->
-                                            view?.evaluateJavascript(SefazPortals.buildFillKeyJs(key), null)
-                                        }
-                                        view?.evaluateJavascript(SefazPortals.WEBVIEW_EXTRACTION_JS) { raw ->
-                                            if (!raw.isNullOrBlank()) {
-                                                onWebViewExtracted(raw, true)
+                                            override fun onPageFinished(view: WebView?, url: String?) {
+                                                super.onPageFinished(view, url)
+                                                if (!url.isNullOrBlank()) {
+                                                    currentUrl = url
+                                                }
+                                                nfceState.detectedKey?.let { key ->
+                                                    view?.evaluateJavascript(SefazPortals.buildFillKeyJs(key), null)
+                                                }
+                                                view?.evaluateJavascript(SefazPortals.WEBVIEW_EXTRACTION_JS) { raw ->
+                                                    if (!raw.isNullOrBlank()) {
+                                                        onWebViewExtracted(raw, true)
+                                                    }
+                                                }
+                                                // Detecta página em branco retornada por bloqueio anti-bot/VPN da SEFAZ
+                                                view?.postDelayed({
+                                                    if (webErrorMessage == null) {
+                                                        view.evaluateJavascript(
+                                                            "(function(){var t=(document.body&&document.body.innerText||'').trim().length;var f=document.querySelectorAll('input,iframe,form,table').length;return t+'|'+f;})()"
+                                                        ) { check ->
+                                                            val cleaned = check?.trim('"', ' ') ?: ""
+                                                            val parts = cleaned.split("|")
+                                                            val textLen = parts.getOrNull(0)?.toIntOrNull() ?: -1
+                                                            val domCount = parts.getOrNull(1)?.toIntOrNull() ?: -1
+                                                            if (textLen == 0 && domCount == 0) {
+                                                                webErrorMessage = "O site da SEFAZ (${nfceState.selectedPortal.ufSigla}) abriu em branco (comum com bloqueio anti-robô ou VPN ativa). Toque em \"Abrir no Navegador\" abaixo para consultar pelo Chrome."
+                                                            }
+                                                        }
+                                                    }
+                                                }, 1800L)
+                                            }
+
+                                            override fun onReceivedHttpError(
+                                                view: WebView?,
+                                                request: WebResourceRequest?,
+                                                errorResponse: WebResourceResponse?
+                                            ) {
+                                                super.onReceivedHttpError(view, request, errorResponse)
+                                                if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 400) {
+                                                    val code = errorResponse?.statusCode ?: 0
+                                                    webErrorMessage = "O site da SEFAZ (${nfceState.selectedPortal.ufSigla}) recusou o acesso interno (HTTP $code — comum com proteção anti-robô ou VPN). Toque em \"Abrir no Navegador\"."
+                                                }
+                                            }
+
+                                            override fun onReceivedError(
+                                                view: WebView?,
+                                                request: WebResourceRequest?,
+                                                error: WebResourceError?
+                                            ) {
+                                                super.onReceivedError(view, request, error)
+                                                if (request?.isForMainFrame == true) {
+                                                    webErrorMessage = "Não foi possível abrir o site dentro do app. Você pode abrir no navegador do celular (Chrome) ou tirar uma foto do cupom."
+                                                }
+                                            }
+
+                                            override fun onReceivedSslError(
+                                                view: WebView?,
+                                                handler: SslErrorHandler?,
+                                                error: SslError?
+                                            ) {
+                                                handler?.cancel()
+                                                webErrorMessage = "Este site estadual usa um certificado que precisa ser aberto no navegador do celular (Chrome)."
+                                            }
+
+                                            override fun onRenderProcessGone(
+                                                view: WebView?,
+                                                detail: RenderProcessGoneDetail?
+                                            ): Boolean {
+                                                runCatching {
+                                                    (view?.parent as? ViewGroup)?.removeView(view)
+                                                    view?.destroy()
+                                                }
+                                                webViewRef = null
+                                                forceSoftwareLayer = true
+                                                rendererCrashed = true
+                                                webErrorMessage = "O visualizador interno precisou ser encerrado neste dispositivo. Toque em \"Abrir no Navegador\" para consultar a nota sem erros."
+                                                return true
                                             }
                                         }
-                                    }
-
-                                    override fun onReceivedError(
-                                        view: WebView?,
-                                        request: WebResourceRequest?,
-                                        error: WebResourceError?
-                                    ) {
-                                        super.onReceivedError(view, request, error)
-                                        if (request?.isForMainFrame == true) {
-                                            webErrorMessage = "Não foi possível abrir este portal dentro do app (${error?.description ?: "falha de conexão"}). Use \"Abrir no Chrome\" para visualizar a nota e depois cole o texto ou tire um print."
+                                        webChromeClient = object : WebChromeClient() {
+                                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                                webProgress = newProgress
+                                            }
                                         }
+                                        val initialSafeUrl = SefazPortals.sanitizeSefazUrl(resolvedFallbackUrl)
+                                            ?: nfceState.selectedPortal.url
+                                        lastLoadedUrl = initialSafeUrl
+                                        loadUrl(initialSafeUrl)
+                                        webViewRef = this
                                     }
-
-                                    override fun onReceivedSslError(
-                                        view: WebView?,
-                                        handler: SslErrorHandler?,
-                                        error: SslError?
-                                    ) {
-                                        handler?.cancel()
-                                        webErrorMessage = "O certificado digital deste portal estadual exige abertura pelo navegador do celular (Chrome). Toque em \"Abrir no Chrome\" abaixo para abrir a nota diretamente."
+                                },
+                                update = { wv ->
+                                    val targetSafeUrl = SefazPortals.sanitizeSefazUrl(resolvedFallbackUrl)
+                                    if (!targetSafeUrl.isNullOrBlank() && targetSafeUrl != lastLoadedUrl) {
+                                        webErrorMessage = null
+                                        currentUrl = targetSafeUrl
+                                        lastLoadedUrl = targetSafeUrl
+                                        wv.loadUrl(targetSafeUrl)
                                     }
-                                }
-                                webChromeClient = object : WebChromeClient() {
-                                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                        webProgress = newProgress
-                                    }
-                                }
-                                val initialSafeUrl = SefazPortals.sanitizeSefazUrl(nfceState.activePortalUrl)
-                                    ?: nfceState.selectedPortal.url
-                                loadUrl(initialSafeUrl)
-                                webViewRef = this
-                            }
-                        },
-                        update = { wv ->
-                            val targetSafeUrl = SefazPortals.sanitizeSefazUrl(nfceState.activePortalUrl)
-                            if (!targetSafeUrl.isNullOrBlank() &&
-                                wv.url != targetSafeUrl &&
-                                currentUrl != targetSafeUrl
-                            ) {
-                                webErrorMessage = null
-                                currentUrl = targetSafeUrl
-                                wv.loadUrl(targetSafeUrl)
-                            }
-                            webViewRef = wv
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
 
                     webErrorMessage?.let { errorMsg ->
                         Box(
@@ -406,7 +614,7 @@ internal fun NfcePortalWebViewDialog(
                                         modifier = Modifier.size(34.dp)
                                     )
                                     Text(
-                                        text = "Portal bloqueado no navegador interno",
+                                        text = "Site indisponível aqui dentro",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -419,7 +627,7 @@ internal fun NfcePortalWebViewDialog(
                                         onClick = {
                                             openUrlInExternalBrowser(
                                                 context = context,
-                                                url = currentUrl.ifBlank { nfceState.selectedPortal.url }
+                                                url = currentUrl.ifBlank { resolvedFallbackUrl }
                                             )
                                         },
                                         modifier = Modifier
@@ -428,12 +636,17 @@ internal fun NfcePortalWebViewDialog(
                                     ) {
                                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Abrir no Chrome / Navegador")
+                                        Text("Abrir no Navegador")
                                     }
                                     OutlinedButton(
                                         onClick = {
                                             webErrorMessage = null
-                                            webViewRef?.reload()
+                                            if (rendererCrashed) {
+                                                rendererCrashed = false
+                                                retryAttempt++
+                                            } else {
+                                                webViewRef?.reload()
+                                            }
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
@@ -459,7 +672,7 @@ internal fun NfcePortalWebViewDialog(
                         onClick = {
                             openUrlInExternalBrowser(
                                 context = context,
-                                url = currentUrl.ifBlank { nfceState.selectedPortal.url }
+                                url = currentUrl.ifBlank { resolvedFallbackUrl }
                             )
                         },
                         modifier = Modifier
@@ -468,7 +681,7 @@ internal fun NfcePortalWebViewDialog(
                     ) {
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Abrir no Chrome")
+                        Text("No Chrome", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Button(
                         onClick = {
@@ -476,13 +689,14 @@ internal fun NfcePortalWebViewDialog(
                                 onWebViewExtracted(raw.orEmpty(), false)
                             }
                         },
+                        enabled = !rendererCrashed && webViewRef != null,
                         modifier = Modifier
                             .weight(1f)
                             .testTag("nfce_extract_webview_button")
                     ) {
                         Icon(Icons.Rounded.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Extrair Itens")
+                        Text("Capturar Agora", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -496,7 +710,8 @@ internal fun LazyListScope.nfceParsedItemsSection(
     selectedCount: Int,
     onToggleItem: (Int) -> Unit,
     onSelectItemCategory: (Int, Long) -> Unit,
-    onConfirmImport: () -> Unit
+    onConfirmImport: () -> Unit,
+    onDiscardImport: () -> Unit
 ) {
     if (nfceState.parsedItems.isEmpty()) return
 
@@ -508,35 +723,77 @@ internal fun LazyListScope.nfceParsedItemsSection(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, extended.positive.copy(alpha = 0.45f))
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = nfceState.storeName ?: "Itens Prontos para Importar",
+                        text = nfceState.storeName ?: "Itens Prontos para Salvar",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "$selectedCount de ${nfceState.parsedItems.size} selecionado(s) • Total: ${
+                        text = "$selectedCount de ${nfceState.parsedItems.size} marcado(s) • Total: ${
                             formatBrl(nfceState.parsedItems.filter { it.selected }.sumOf { it.totalPrice })
                         }",
                         style = MaterialTheme.typography.bodySmall,
                         color = extended.positive
                     )
                 }
-                Button(
-                    onClick = onConfirmImport,
-                    enabled = selectedCount > 0,
-                    modifier = Modifier.testTag("nfce_confirm_import_button")
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Importar ($selectedCount)")
+                    OutlinedButton(
+                        onClick = onDiscardImport,
+                        enabled = !nfceState.isImporting,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("nfce_discard_import_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Excluir",
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Button(
+                        onClick = onConfirmImport,
+                        enabled = selectedCount > 0 && !nfceState.isImporting,
+                        modifier = Modifier
+                            .weight(1.35f)
+                            .testTag("nfce_confirm_import_button")
+                    ) {
+                        if (nfceState.isImporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Salvando...", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        } else {
+                            Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Importar ($selectedCount)", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
         }
@@ -586,9 +843,9 @@ internal fun LazyListScope.nfceParsedItemsSection(
                         )
                         Text(
                             text = if (existingMatch != null) {
-                                "Somará ao existente ${existingMatch.uniqueCode} (saldo: ${formatQty(existingMatch.quantity)} ${existingMatch.unit})"
+                                "Somará ao item ${existingMatch.uniqueCode} (atual: ${formatQty(existingMatch.quantity)} ${existingMatch.unit})"
                             } else {
-                                "Será cadastrado com novo código único AST"
+                                "Novo item no estoque"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = if (existingMatch != null) extended.info else extended.positive

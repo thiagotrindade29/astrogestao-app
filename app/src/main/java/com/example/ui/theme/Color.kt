@@ -2,39 +2,39 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Light Workspace Palette (matching screenshots)
-val WorkspaceBg = Color(0xFFF4F5FA)
-val CardWhite = Color(0xFFFFFFFF)
-val SurfaceMuted = Color(0xFFEDF0F7)
-val BorderLight = Color(0xFFE2E8F0)
-val InkPrimary = Color(0xFF0F172A)
-val SlateMuted = Color(0xFF64748B)
+// ============================================================================
+// TEMA PRINCIPAL — Regra 60 / 30 / 10
+// 60% Índigo Noturno • 30% Pêssego Claro • 10% Ciano Elétrico (#00D2FF)
+// ============================================================================
+val IndigoNoturnoDeep = Color(0xFF151436)
+val IndigoNoturno = Color(0xFF1E1E48)
+val IndigoNoturnoElevated = Color(0xFF2B2A5E)
+val IndigoNoturnoMuted = Color(0xFF53527E)
 
-// Brand & KPI Signature Colors (matching screenshots)
-val CosmicPurple = Color(0xFF5B3DF5)
-val CosmicPurpleLight = Color(0xFFEFEAFF)
-val CosmicIndigo = Color(0xFF4F46E5)
+val PessegoClaro = Color(0xFFFCD4B1)
+val PessegoClaroSoft = Color(0xFFFFEADF)
+val PessegoClaroWorkspace = Color(0xFFFFF7F0)
+val PessegoClaroCard = Color(0xFFFFFBF7)
+val PessegoClaroBorder = Color(0xFFE6CEB8)
 
-val KpiNavyBg = Color(0xFF0F172A)
-val KpiBlueBg = Color(0xFF1D4ED8)
-val KpiEmeraldBg = Color(0xFF047857)
-val AlertRed = Color(0xFFDC2626)
-val AlertRedContainer = Color(0xFFFEE2E2)
+val CianoEletrico = Color(0xFF00D2FF)
+val CianoEletricoContainer = Color(0xFFD6F7FF)
+val CianoEletricoInk = Color(0xFF006E8A)
 
-val LowStockAmberText = Color(0xFF92400E)
-val LowStockAmberBg = Color(0xFFFEF3C7)
+// ============================================================================
+// TEMA ESCURO — Regra 60 / 30 / 10
+// 60% Azul Sideral • 30% Prata de Níquel • 10% Lilás Órion (#9B7CFF)
+// ============================================================================
+val AzulSideralBg = Color(0xFF0F1C2E)
+val AzulSideralSurface = Color(0xFF16263D)
+val AzulSideralElevated = Color(0xFF1F3350)
+val AzulSideralBorder = Color(0xFF2D4463)
 
-val PositiveEmerald = Color(0xFF059669)
-val PositiveEmeraldBg = Color(0xFFD1FAE5)
-val AdjustmentBlue = Color(0xFF2563EB)
-val AdjustmentBlueBg = Color(0xFFDBEAFE)
+val PrataNiquel = Color(0xFFC2CBD3)
+val PrataNiquelLight = Color(0xFFE9EEF2)
+val PrataNiquelMuted = Color(0xFF8C9AA8)
+val PrataNiquelContainer = Color(0xFF27394F)
 
-// Dark Cosmic Palette (login & optional dark theme)
-val DarkSpaceBg = Color(0xFF090D1F)
-val DarkSpaceSurface = Color(0xFF111833)
-val DarkSpaceElevated = Color(0xFF1A2447)
-val DarkSpaceBorder = Color(0xFF2B3A67)
-val DarkStarlight = Color(0xFFF8FAFC)
-val DarkMuted = Color(0xFF94A3B8)
-val DarkPurple = Color(0xFF818CF8)
-val DarkPurpleContainer = Color(0xFF28245E)
+val LilasOrion = Color(0xFF9B7CFF)
+val LilasOrionContainer = Color(0xFF2D2758)
+val LilasOrionSoft = Color(0xFFD9CCFF)

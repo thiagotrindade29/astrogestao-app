@@ -53,7 +53,17 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.local.MovementType
 import com.example.ui.theme.AstroTheme
+import com.example.ui.theme.AzulSideralElevated
+import com.example.ui.theme.AzulSideralSurface
+import com.example.ui.theme.CianoEletrico
+import com.example.ui.theme.IndigoNoturno
+import com.example.ui.theme.IndigoNoturnoElevated
 import com.example.ui.theme.JetBrainsMonoFamily
+import com.example.ui.theme.LilasOrion
+import com.example.ui.theme.LilasOrionSoft
+import com.example.ui.theme.PessegoClaro
+import com.example.ui.theme.PessegoClaroSoft
+import com.example.ui.theme.PrataNiquel
 import com.example.ui.viewmodel.MonthlySpendingPoint
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
@@ -96,13 +106,20 @@ fun AstroBrandLogo(
     modifier: Modifier = Modifier,
     sizeDp: Int = 38
 ) {
+    val extended = AstroTheme.extended
+    val badgeStart = if (extended.isDark) AzulSideralElevated else IndigoNoturno
+    val badgeEnd = if (extended.isDark) AzulSideralSurface else IndigoNoturnoElevated
+    val orbitColor = if (extended.isDark) PrataNiquel else PessegoClaro
+    val accentDot = if (extended.isDark) LilasOrion else CianoEletrico
+    val letterEnd = if (extended.isDark) LilasOrionSoft else PessegoClaroSoft
+
     Box(
         modifier = modifier
             .size(sizeDp.dp)
             .clip(RoundedCornerShape((sizeDp * 0.30f).dp))
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFF8B5CF6), Color(0xFF2563EB))
+                    colors = listOf(badgeStart, badgeEnd)
                 )
             ),
         contentAlignment = Alignment.Center
@@ -113,7 +130,7 @@ fun AstroBrandLogo(
             // Orbital ring (64x64 reference: cx=32, cy=32, rx=26, ry=10.5, rotate=-32)
             rotate(degrees = -32f, pivot = Offset(w * 0.5f, h * 0.5f)) {
                 drawOval(
-                    color = Color(0xFFC4B5FD).copy(alpha = 0.9f),
+                    color = orbitColor.copy(alpha = 0.88f),
                     topLeft = Offset(w * (6f / 64f), h * (21.5f / 64f)),
                     size = Size(w * (52f / 64f), h * (21f / 64f)),
                     style = Stroke(width = w * (2f / 64f))
@@ -130,7 +147,7 @@ fun AstroBrandLogo(
             drawPath(
                 path = path,
                 brush = Brush.linearGradient(
-                    colors = listOf(Color.White, Color(0xFFDBEAFE))
+                    colors = listOf(Color.White, letterEnd)
                 ),
                 style = Stroke(
                     width = w * (4f / 64f),
@@ -140,8 +157,8 @@ fun AstroBrandLogo(
             )
             // Orbiting star dot (51, 18, r=3)
             drawCircle(
-                color = Color.White,
-                radius = w * (3f / 64f),
+                color = accentDot,
+                radius = w * (3.4f / 64f),
                 center = Offset(w * (51f / 64f), h * (18f / 64f))
             )
         }
@@ -155,6 +172,7 @@ fun SolidKpiCard(
     subtitle: String,
     containerColor: Color,
     modifier: Modifier = Modifier,
+    contentColor: Color = Color.White,
     testTag: String = "kpi_solid"
 ) {
     Card(
@@ -172,7 +190,7 @@ fun SolidKpiCard(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.82f),
+                color = contentColor.copy(alpha = 0.82f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -182,14 +200,14 @@ fun SolidKpiCard(
                     fontFamily = JetBrainsMonoFamily,
                     fontWeight = FontWeight.Bold
                 ),
-                color = Color.White,
+                color = contentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.80f),
+                color = contentColor.copy(alpha = 0.80f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -222,7 +240,7 @@ fun AlertRedKpiCard(
                 modifier = Modifier
                     .width(5.dp)
                     .fillMaxHeight()
-                    .background(extended.negative)
+                    .background(extended.kpiAccentBar)
             )
             Column(
                 modifier = Modifier
@@ -233,7 +251,7 @@ fun AlertRedKpiCard(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = extended.negative,
+                    color = extended.kpiAccentText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -336,7 +354,7 @@ fun MonthlySpendingCanvasChart(
     modifier: Modifier = Modifier
 ) {
     val purchasesColor = MaterialTheme.colorScheme.primary
-    val consumptionColor = AstroTheme.extended.positive
+    val consumptionColor = MaterialTheme.colorScheme.tertiary
     val gridColor = AstroTheme.extended.borderSubtle
 
     Column(

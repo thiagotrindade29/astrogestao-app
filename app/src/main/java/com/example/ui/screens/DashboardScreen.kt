@@ -260,6 +260,7 @@ fun DashboardScreen(
                         value = uiState.registeredProductCount.toString(),
                         subtitle = stringResource(R.string.kpi_registered_sub, formatQty(uiState.totalUnitsInStock)),
                         containerColor = extended.kpiNavy,
+                        contentColor = extended.kpiNavyContent,
                         modifier = mod,
                         testTag = "kpi_products_count"
                     )
@@ -270,6 +271,7 @@ fun DashboardScreen(
                         value = formatBrl(uiState.totalEstimatedValue),
                         subtitle = stringResource(R.string.kpi_estimated_sub),
                         containerColor = extended.kpiEmerald,
+                        contentColor = extended.kpiEmeraldContent,
                         modifier = mod,
                         testTag = "kpi_estimated_value"
                     )
@@ -280,6 +282,7 @@ fun DashboardScreen(
                         value = uiState.restockAlertsCount.toString(),
                         subtitle = stringResource(R.string.kpi_restock_sub),
                         containerColor = extended.kpiBlue,
+                        contentColor = extended.kpiBlueContent,
                         modifier = mod,
                         testTag = "kpi_restock_count"
                     )

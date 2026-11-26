@@ -66,6 +66,7 @@ data class NfceImportState(
     val activePortalUrl: String = SefazPortals.allPortals.first().url,
     val showWebPortal: Boolean = false,
     val isFetching: Boolean = false,
+    val isImporting: Boolean = false,
     val storeName: String? = null,
     val parsedItems: List<ParsedNfceItem> = emptyList(),
     val statusMessage: String? = null
