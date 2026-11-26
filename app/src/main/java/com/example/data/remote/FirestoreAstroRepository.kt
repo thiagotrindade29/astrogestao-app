@@ -359,7 +359,7 @@ class FirestoreAstroRepository(
             )
         }
 
-        defaultCategorySpecs().forEach { (name, color, note) ->
+        defaultCategorySpecs().forEach { spec ->
             val catId = nextLocalId()
             val catRef = householdRef.collection("categories").document(catId.toString())
             ops.add { batch ->
@@ -369,9 +369,10 @@ class FirestoreAstroRepository(
                         "householdId" to householdId,
                         "memberUids" to listOf(uid),
                         "localId" to catId,
-                        "name" to name,
-                        "colorHex" to color,
-                        "sectorNote" to note,
+                        "name" to spec.name,
+                        "colorHex" to spec.colorHex,
+                        "sectorNote" to spec.sectorNote,
+                        "singleConsumption" to spec.singleConsumption,
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
@@ -408,13 +409,21 @@ class FirestoreAstroRepository(
         return householdId
     }
 
-    private fun defaultCategorySpecs(): List<Triple<String, Long, String>> = listOf(
-        Triple("Despensa", 0xFF5B3DF5L, "Armários secos e grãos"),
-        Triple("Geladeira", 0xFF0284C7L, "Frios, laticínios e bebidas"),
-        Triple("Limpeza", 0xFF059669L, "Lavanderia e área de serviço"),
-        Triple("Higiene", 0xFFD97706L, "Banheiros e cuidados pessoais"),
-        Triple("Congelados", 0xFF7C3AEDL, "Freezer e salgados"),
-        Triple("Hortifruti", 0xFF16A34AL, "Frutas, verduras e legumes")
+    private data class DefaultCategorySpec(
+        val name: String,
+        val colorHex: Long,
+        val sectorNote: String,
+        val singleConsumption: Boolean = false
+    )
+
+    private fun defaultCategorySpecs(): List<DefaultCategorySpec> = listOf(
+        DefaultCategorySpec("Despensa", 0xFF5B3DF5L, "Armários secos e grãos"),
+        DefaultCategorySpec("Geladeira", 0xFF0284C7L, "Frios, laticínios e bebidas"),
+        DefaultCategorySpec("Limpeza", 0xFF059669L, "Lavanderia e área de serviço"),
+        DefaultCategorySpec("Higiene", 0xFFD97706L, "Banheiros e cuidados pessoais"),
+        DefaultCategorySpec("Congelados", 0xFF7C3AEDL, "Freezer e salgados"),
+        DefaultCategorySpec("Hortifruti", 0xFF16A34AL, "Frutas, verduras e legumes"),
+        DefaultCategorySpec("Consumo Único", 0xFFDB2777L, "Lanches e itens consumidos na hora (sem alerta)", singleConsumption = true)
     )
 
     suspend fun createPersonalHousehold(
@@ -684,6 +693,7 @@ class FirestoreAstroRepository(
                         "name" to cleanName,
                         "colorHex" to category.colorHex,
                         "sectorNote" to category.sectorNote.trim().take(200),
+                        "singleConsumption" to category.singleConsumption,
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
@@ -694,6 +704,7 @@ class FirestoreAstroRepository(
                         "name" to cleanName,
                         "colorHex" to category.colorHex,
                         "sectorNote" to category.sectorNote.trim().take(200),
+                        "singleConsumption" to category.singleConsumption,
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
@@ -1629,13 +1640,15 @@ class FirestoreAstroRepository(
             val geladeiraId = nextLocalId()
             val limpezaId = nextLocalId()
             val higieneId = nextLocalId()
+            val consumoUnicoId = nextLocalId()
 
             listOf(
-                Triple(despensaId, "Despensa", 0xFF5B3DF5L to "Armários secos e bebidas"),
-                Triple(geladeiraId, "Geladeira", 0xFF0284C7L to "Frios e perecíveis"),
-                Triple(limpezaId, "Limpeza", 0xFF059669L to "Lavanderia e cozinha"),
-                Triple(higieneId, "Higiene", 0xFFD97706L to "Banheiros")
-            ).forEach { (catId, name, colorNote) ->
+                DefaultCategorySpec("Despensa", 0xFF5B3DF5L, "Armários secos e bebidas") to despensaId,
+                DefaultCategorySpec("Geladeira", 0xFF0284C7L, "Frios e perecíveis") to geladeiraId,
+                DefaultCategorySpec("Limpeza", 0xFF059669L, "Lavanderia e cozinha") to limpezaId,
+                DefaultCategorySpec("Higiene", 0xFFD97706L, "Banheiros") to higieneId,
+                DefaultCategorySpec("Consumo Único", 0xFFDB2777L, "Lanches e itens consumidos na hora (sem alerta)", singleConsumption = true) to consumoUnicoId
+            ).forEach { (spec, catId) ->
                 ops.add { batch ->
                     batch.set(
                         hhRef.collection("categories").document(catId.toString()),
@@ -1643,9 +1656,10 @@ class FirestoreAstroRepository(
                             "householdId" to household.docId,
                             "memberUids" to household.memberUids,
                             "localId" to catId,
-                            "name" to name,
-                            "colorHex" to colorNote.first,
-                            "sectorNote" to colorNote.second,
+                            "name" to spec.name,
+                            "colorHex" to spec.colorHex,
+                            "sectorNote" to spec.sectorNote,
+                            "singleConsumption" to spec.singleConsumption,
                             "createdAt" to FieldValue.serverTimestamp(),
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
@@ -1669,10 +1683,10 @@ class FirestoreAstroRepository(
             val p6 = nextLocalId()
 
             val sampleProducts = listOf(
-                ProductEntity(p1, "AST-0001", "7891000100103", "COXINHA 60GR", despensaId, "kg", 0.17, 1.0, 32.90, 30.50, now + 12 * day, updatedAt = now),
+                ProductEntity(p1, "AST-0001", "7891000100103", "COXINHA 60GR", consumoUnicoId, "kg", 0.17, 0.0, 32.90, 30.50, now + 12 * day, updatedAt = now),
                 ProductEntity(p2, "AST-0002", "7891000200202", "PAO DE QUEIJO", despensaId, "kg", 0.22, 1.0, 24.50, 26.00, now + 21 * day, updatedAt = now),
                 ProductEntity(p3, "AST-0003", "7891149103508", "CERVEJA SKOL 350ML", despensaId, "un", 1.0, 6.0, 4.29, 3.99, null, updatedAt = now),
-                ProductEntity(p4, "AST-0004", "7891000400401", "PASTEL FRITO DE CALABRESA C QUEIJO", geladeiraId, "un", 1.0, 4.0, 7.50, 7.50, now + 5 * day, updatedAt = now),
+                ProductEntity(p4, "AST-0004", "7891000400401", "PASTEL FRITO DE CALABRESA C QUEIJO", consumoUnicoId, "un", 1.0, 0.0, 7.50, 7.50, now + 5 * day, updatedAt = now),
                 ProductEntity(p5, "AST-0005", "7891024135006", "DETERGENTE NEUTRO 500ML", limpezaId, "un", 1.0, 3.0, 3.45, 3.89, null, updatedAt = now),
                 ProductEntity(p6, "AST-0006", "7891150024601", "SABONETE LIQUIDO LAVANDA", higieneId, "un", 1.0, 2.0, 14.50, 13.90, null, updatedAt = now)
             )
@@ -1796,6 +1810,7 @@ class FirestoreAstroRepository(
                         put("name", cat.name)
                         put("colorHex", cat.colorHex)
                         put("sectorNote", cat.sectorNote)
+                        put("singleConsumption", cat.singleConsumption)
                     })
                 }
             })
@@ -1917,6 +1932,7 @@ class FirestoreAstroRepository(
                             "name" to name,
                             "colorHex" to obj.optLong("colorHex", 0xFF5B3DF5L),
                             "sectorNote" to obj.optString("sectorNote", "").take(200),
+                            "singleConsumption" to obj.optBoolean("singleConsumption", false),
                             "createdAt" to FieldValue.serverTimestamp(),
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
@@ -2111,4 +2127,25 @@ class FirestoreAstroRepository(
             Result.failure(e)
         }
     }
+
+    suspend fun fetchAppVersionConfig(): Result<AppVersionConfigDoc?> {
+        return try {
+            val uid = auth.currentUser?.uid
+            if (uid.isNullOrBlank()) {
+                return Result.success(null)
+            }
+            val snap = db.collection("appConfig").document("android").get().await()
+            if (!snap.exists()) {
+                Result.success(null)
+            } else {
+                Result.success(snap.toObject(AppVersionConfigDoc::class.java))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, "appConfig/android")
+            Result.failure(e)
+        }
+    }
 }
+

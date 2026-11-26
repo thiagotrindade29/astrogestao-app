@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -111,6 +112,9 @@ fun MoreScreen(
     onCreatePersonalHousehold: (String) -> Unit,
     onMigrateLocalToCloud: () -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
+    onToggleLowStockNotifications: (Boolean) -> Unit = {},
+    onCheckAppUpdate: () -> Unit = {},
+    onOpenAppUpdateUrl: (String) -> Unit = {},
     onLoadSampleCatalog: () -> Unit,
     onExportBackup: (Uri) -> Unit,
     onRestoreBackup: (Uri) -> Unit,
@@ -256,6 +260,9 @@ fun MoreScreen(
                 onOpenCreatePersonalHousehold = { showCreateHouseholdDialog = true },
                 onMigrateLocalToCloud = onMigrateLocalToCloud,
                 onToggleDarkMode = onToggleDarkMode,
+                onToggleLowStockNotifications = onToggleLowStockNotifications,
+                onCheckAppUpdate = onCheckAppUpdate,
+                onOpenAppUpdateUrl = onOpenAppUpdateUrl,
                 onRequestSampleCatalog = {
                     if (uiState.products.isNotEmpty() || uiState.movements.isNotEmpty()) {
                         showSampleOverwriteConfirm = true
@@ -465,6 +472,7 @@ private fun CategoriesTab(
                         Text(
                             text = listOfNotNull(
                                 cat.sectorNote.takeIf { it.isNotBlank() },
+                                if (cat.singleConsumption) "Consumo único (sem alerta)" else null,
                                 "$count produto(s)"
                             ).joinToString(" • "),
                             style = MaterialTheme.typography.bodySmall,
@@ -504,6 +512,9 @@ private fun UsersAndSettingsTab(
     onOpenCreatePersonalHousehold: () -> Unit,
     onMigrateLocalToCloud: () -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
+    onToggleLowStockNotifications: (Boolean) -> Unit,
+    onCheckAppUpdate: () -> Unit,
+    onOpenAppUpdateUrl: (String) -> Unit,
     onRequestSampleCatalog: () -> Unit,
     onExportBackup: (Uri) -> Unit,
     onRequestRestoreBackup: (Uri) -> Unit,
@@ -633,6 +644,33 @@ private fun UsersAndSettingsTab(
                             checked = uiState.isDarkMode,
                             onCheckedChange = onToggleDarkMode,
                             modifier = Modifier.testTag("dark_mode_switch")
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "Lembrete de estoque baixo",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "Notificação simples para lembrar itens não repostos (exceto Consumo Único).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = uiState.lowStockNotificationsEnabled,
+                            onCheckedChange = onToggleLowStockNotifications,
+                            modifier = Modifier.testTag("low_stock_notifications_switch")
                         )
                     }
 
@@ -820,7 +858,7 @@ private fun UsersAndSettingsTab(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                            text = "v${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE}",
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = JetBrainsMonoFamily,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -856,6 +894,60 @@ private fun UsersAndSettingsTab(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Restaurar", maxLines = 1, softWrap = false)
                         }
+                    }
+
+                    val updateInfo = uiState.appUpdateInfo
+                    if (updateInfo != null && updateInfo.isUpdateAvailable) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Atualização disponível: v${updateInfo.latestVersionName}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (updateInfo.releaseNotes.isNotBlank()) {
+                                    Text(
+                                        text = updateInfo.releaseNotes,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (updateInfo.downloadUrl.startsWith("https://", ignoreCase = true)) {
+                                    Button(
+                                        onClick = { onOpenAppUpdateUrl(updateInfo.downloadUrl) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Rounded.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Baixar v${updateInfo.latestVersionName}")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onCheckAppUpdate,
+                        enabled = !uiState.isCheckingUpdate,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("check_update_button")
+                    ) {
+                        Icon(Icons.Rounded.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            if (uiState.isCheckingUpdate) "Verificando versão..."
+                            else "Verificar atualizações"
+                        )
                     }
 
                     OutlinedButton(

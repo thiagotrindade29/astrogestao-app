@@ -56,8 +56,14 @@ fun ProductEditorDialog(
     var quantityText by remember {
         mutableStateOf(initialProduct?.quantity?.toString() ?: "1")
     }
+    var minStockEdited by remember { mutableStateOf(initialProduct != null) }
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId }
+    val isSingleConsumption = selectedCategory?.singleConsumption == true
     var minStockText by remember {
-        mutableStateOf(initialProduct?.minStock?.toString() ?: "1")
+        mutableStateOf(
+            initialProduct?.minStock?.toString()
+                ?: if (isSingleConsumption) "0" else "1"
+        )
     }
     var priceText by remember {
         mutableStateOf(initialProduct?.unitPrice?.takeIf { it > 0.0 }?.toString() ?: "")
@@ -117,7 +123,12 @@ fun ProductEditorDialog(
                     categories.forEach { cat ->
                         FilterChip(
                             selected = selectedCategoryId == cat.id,
-                            onClick = { selectedCategoryId = cat.id },
+                            onClick = {
+                                selectedCategoryId = cat.id
+                                if (!minStockEdited) {
+                                    minStockText = if (cat.singleConsumption) "0" else "1"
+                                }
+                            },
                             leadingIcon = {
                                 Box(
                                     modifier = Modifier
@@ -158,13 +169,24 @@ fun ProductEditorDialog(
                     )
                     OutlinedTextField(
                         value = minStockText,
-                        onValueChange = { minStockText = it },
+                        onValueChange = {
+                            minStockText = it
+                            minStockEdited = true
+                        },
                         label = { Text(stringResource(R.string.label_min_stock)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
                             .testTag("product_min_input")
+                    )
+                }
+
+                if (isSingleConsumption) {
+                    Text(
+                        text = "Categoria de consumo único: este item não gera alertas de estoque baixo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 

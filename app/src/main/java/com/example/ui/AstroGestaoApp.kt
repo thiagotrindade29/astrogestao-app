@@ -1,5 +1,12 @@
 package com.example.ui
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -89,6 +96,7 @@ import com.example.data.local.MovementType
 import com.example.data.local.ProductEntity
 import com.example.data.remote.authStateFlow
 import com.example.data.remote.performGoogleSignOut
+import com.example.notifications.LowStockNotificationHelper
 import com.example.ui.components.AstroBrandLogo
 import com.example.ui.screens.CategoryEditorDialog
 import com.example.ui.screens.DashboardScreen
@@ -254,6 +262,36 @@ private fun AuthenticatedAstroContent(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val timeoutNotice = stringResource(R.string.session_expired_inactivity)
+    val context = LocalContext.current
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.evaluateLowStockReminder(context, forceCheck = true)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !LowStockNotificationHelper.hasPermission(context) &&
+            !app.preferencesRepository.wasNotificationPermissionPrompted()
+        ) {
+            app.preferencesRepository.markNotificationPermissionPrompted()
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    LaunchedEffect(
+        uiState.isLoading,
+        uiState.householdId,
+        uiState.lowStockProducts,
+        uiState.lowStockNotificationsEnabled
+    ) {
+        if (!uiState.isLoading && uiState.householdId.isNotBlank()) {
+            viewModel.evaluateLowStockReminder(context)
+        }
+    }
 
     LaunchedEffect(viewModel) {
         while (true) {
@@ -632,7 +670,16 @@ private fun AuthenticatedAstroContent(
                                         type = MovementType.ENTRADA
                                     )
                                 },
-                                onLoadSampleCatalog = viewModel::loadSampleCatalog
+                                onLoadSampleCatalog = viewModel::loadSampleCatalog,
+                                onOpenUpdate = { url ->
+                                    if (url.startsWith("https://", ignoreCase = true)) {
+                                        openSafeExternalUpdateUrl(context, url)
+                                    } else {
+                                        moreInitialTab = 2
+                                        navigateTab(AstroRoutes.ROUTE_MORE)
+                                    }
+                                },
+                                onDismissUpdate = viewModel::dismissAppUpdateBanner
                             )
                         }
 
@@ -705,6 +752,17 @@ private fun AuthenticatedAstroContent(
                                 onCreatePersonalHousehold = viewModel::createNewPersonalHousehold,
                                 onMigrateLocalToCloud = viewModel::migrateLocalDataToCloud,
                                 onToggleDarkMode = viewModel::setDarkMode,
+                                onToggleLowStockNotifications = { enabled ->
+                                    if (enabled &&
+                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        !LowStockNotificationHelper.hasPermission(appContext)
+                                    ) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                    viewModel.setLowStockNotificationsEnabled(enabled, appContext)
+                                },
+                                onCheckAppUpdate = { viewModel.checkAppVersion(manual = true) },
+                                onOpenAppUpdateUrl = { url -> openSafeExternalUpdateUrl(appContext, url) },
                                 onLoadSampleCatalog = viewModel::loadSampleCatalog,
                                 onExportBackup = { uri -> viewModel.exportBackupToUri(appContext, uri) },
                                 onRestoreBackup = { uri -> viewModel.importBackupFromUri(appContext, uri) },
@@ -748,5 +806,16 @@ private fun AuthenticatedAstroContent(
                 }
             }
         }
+    }
+}
+
+private fun openSafeExternalUpdateUrl(context: Context, url: String) {
+    val clean = url.trim()
+    if (!clean.startsWith("https://", ignoreCase = true)) return
+    runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(clean)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 }

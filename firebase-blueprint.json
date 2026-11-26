@@ -214,6 +214,10 @@
           "type": "string",
           "description": "Optional sector description."
         },
+        "singleConsumption": {
+          "type": "boolean",
+          "description": "When true, items in this category are immediate/single-consumption products and do not trigger low-stock alerts."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -552,9 +556,44 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "AppVersionConfig": {
+      "title": "AppVersionConfig",
+      "description": "Remote app version configuration document used to notify users when an APK update is available.",
+      "type": "object",
+      "properties": {
+        "latestVersionName": {
+          "type": "string",
+          "description": "Latest semantic version string (e.g., 1.2.0)."
+        },
+        "minSupportedVersionName": {
+          "type": "string",
+          "description": "Optional minimum recommended semantic version string."
+        },
+        "releaseNotes": {
+          "type": "string",
+          "description": "Optional short summary of what changed in the update."
+        },
+        "downloadUrl": {
+          "type": "string",
+          "description": "Optional HTTPS link to download the latest APK or release page."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional update timestamp."
+        }
+      },
+      "required": [
+        "latestVersionName"
+      ]
     }
   },
   "firestore": {
+    "/appConfig/{configId}": {
+      "schema": { "$ref": "#/entities/AppVersionConfig" },
+      "description": "Read-only remote app configuration (e.g. appConfig/android) for update notifications."
+    },
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "Private Google user profile and active household workspace reference."

@@ -19,12 +19,16 @@ import com.example.data.nfce.NfceParser
 import com.example.data.nfce.ReceiptImageProcessor
 import com.example.data.nfce.RegionalPortal
 import com.example.data.nfce.SefazPortals
+import com.example.data.remote.AppVersionConfigDoc
 import com.example.data.remote.FirestoreAstroRepository
 import com.example.data.remote.HouseholdDoc
 import com.example.data.remote.unwrapFirestoreException
 import com.example.data.repository.PosCheckoutEntry
 import com.example.data.repository.ProductMatcher
 import com.example.data.repository.ThemePreferencesRepository
+import com.example.data.repository.VersionComparator
+import com.example.notifications.LowStockNotificationHelper
+import com.example.notifications.LowStockReminderPolicy
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +75,14 @@ private sealed interface CloudDataState {
     data class Error(val message: String) : CloudDataState
 }
 
+private data class VersionAndPrefState(
+    val isDarkMode: Boolean = false,
+    val lowStockNotificationsEnabled: Boolean = true,
+    val dismissedUpdateVersion: String = "",
+    val remoteConfig: AppVersionConfigDoc? = null,
+    val isCheckingUpdate: Boolean = false
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class AstroViewModel(
     private val repository: FirestoreAstroRepository,
@@ -90,6 +102,8 @@ class AstroViewModel(
     private val hasLocalMigration = MutableStateFlow(false)
     private val isSyncingWorkspace = MutableStateFlow(false)
     private val bootstrapError = MutableStateFlow<String?>(null)
+    private val remoteVersionConfig = MutableStateFlow<AppVersionConfigDoc?>(null)
+    private val isCheckingUpdate = MutableStateFlow(false)
 
     private val _nfceState = MutableStateFlow(NfceImportState())
     val nfceState: StateFlow<NfceImportState> = _nfceState.asStateFlow()
@@ -101,6 +115,22 @@ class AstroViewModel(
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
     private var lastSyncedSignature: String? = null
+
+    private val versionAndPrefState: Flow<VersionAndPrefState> = combine(
+        prefs.isDarkMode,
+        prefs.lowStockNotificationsEnabled,
+        prefs.dismissedUpdateVersion,
+        remoteVersionConfig,
+        isCheckingUpdate
+    ) { isDark, lowStockNotif, dismissedVersion, remoteCfg, checkingUpdate ->
+        VersionAndPrefState(
+            isDarkMode = isDark,
+            lowStockNotificationsEnabled = lowStockNotif,
+            dismissedUpdateVersion = dismissedVersion,
+            remoteConfig = remoteCfg,
+            isCheckingUpdate = checkingUpdate
+        )
+    }
 
     private fun <T> Flow<T>.unwrapOrFallback(fallback: T, label: String): Flow<T> = catch { error ->
         val firestoreError = error.unwrapFirestoreException()
@@ -167,20 +197,41 @@ class AstroViewModel(
             initialValue = CloudDataState.Loading
         )
 
+    private fun buildAppUpdateInfo(prefState: VersionAndPrefState): AppUpdateInfo? {
+        val cfg = prefState.remoteConfig ?: return null
+        val latest = cfg.latestVersionName.trim()
+        if (latest.isBlank()) return null
+        val current = BuildConfig.VERSION_NAME
+        val updateAvailable = VersionComparator.isUpdateAvailable(current, latest)
+        val belowMin = cfg.minSupportedVersionName.isNotBlank() &&
+            VersionComparator.compare(current, cfg.minSupportedVersionName) < 0
+        val dismissed = !belowMin && prefState.dismissedUpdateVersion.equals(latest, ignoreCase = true)
+        return AppUpdateInfo(
+            currentVersionName = current,
+            latestVersionName = latest,
+            isUpdateAvailable = updateAvailable,
+            isBelowMinimum = belowMin,
+            isDismissed = dismissed,
+            releaseNotes = cfg.releaseNotes.trim(),
+            downloadUrl = cfg.downloadUrl.trim()
+        )
+    }
+
     val uiState: StateFlow<AstroUiState> = combine(
         cloudDataState,
-        prefs.isDarkMode,
+        versionAndPrefState,
         filterState,
         hasLocalMigration,
         isSyncingWorkspace,
         bootstrapError
     ) { values ->
         val cloud = values[0] as CloudDataState
-        val isDark = values[1] as Boolean
+        val prefState = values[1] as VersionAndPrefState
         val filters = values[2] as FilterState
         val localMig = values[3] as Boolean
         val syncing = values[4] as Boolean
         val bootErr = values[5] as String?
+        val updateInfo = buildAppUpdateInfo(prefState)
 
         when (cloud) {
             CloudDataState.Loading -> AstroUiState(
@@ -191,7 +242,10 @@ class AstroViewModel(
                 userName = userName,
                 cloudErrorMessage = bootErr,
                 isSyncingWorkspace = syncing,
-                isDarkMode = isDark,
+                isDarkMode = prefState.isDarkMode,
+                lowStockNotificationsEnabled = prefState.lowStockNotificationsEnabled,
+                appUpdateInfo = updateInfo,
+                isCheckingUpdate = prefState.isCheckingUpdate,
                 productSearchQuery = filters.productSearchQuery,
                 selectedCategoryId = filters.selectedCategoryId,
                 onlyLowStock = filters.onlyLowStock,
@@ -206,7 +260,10 @@ class AstroViewModel(
                 userName = userName,
                 cloudErrorMessage = cloud.message,
                 isSyncingWorkspace = syncing,
-                isDarkMode = isDark,
+                isDarkMode = prefState.isDarkMode,
+                lowStockNotificationsEnabled = prefState.lowStockNotificationsEnabled,
+                appUpdateInfo = updateInfo,
+                isCheckingUpdate = prefState.isCheckingUpdate,
                 productSearchQuery = filters.productSearchQuery,
                 selectedCategoryId = filters.selectedCategoryId,
                 onlyLowStock = filters.onlyLowStock,
@@ -227,7 +284,10 @@ class AstroViewModel(
                 hasLocalMigrationAvailable = localMig,
                 cloudErrorMessage = bootErr,
                 isSyncingWorkspace = syncing,
-                isDarkMode = isDark,
+                isDarkMode = prefState.isDarkMode,
+                lowStockNotificationsEnabled = prefState.lowStockNotificationsEnabled,
+                appUpdateInfo = updateInfo,
+                isCheckingUpdate = prefState.isCheckingUpdate,
                 categories = cloud.categories,
                 products = cloud.products,
                 aliases = cloud.aliases,
@@ -255,6 +315,7 @@ class AstroViewModel(
     init {
         initializeCloudWorkspace()
         observeHouseholdMembershipSync()
+        checkAppVersion(manual = false)
     }
 
     fun initializeCloudWorkspace() {
@@ -295,6 +356,100 @@ class AstroViewModel(
 
     fun setDarkMode(enabled: Boolean) {
         viewModelScope.launch { prefs.setDarkMode(enabled) }
+    }
+
+    fun checkAppVersion(manual: Boolean = true) {
+        if (isCheckingUpdate.value) return
+        viewModelScope.launch {
+            isCheckingUpdate.value = true
+            repository.fetchAppVersionConfig().fold(
+                onSuccess = { doc ->
+                    remoteVersionConfig.value = doc
+                    val latest = doc?.latestVersionName?.trim().orEmpty()
+                    val available = latest.isNotBlank() &&
+                        VersionComparator.isUpdateAvailable(BuildConfig.VERSION_NAME, latest)
+                    if (manual) {
+                        when {
+                            available -> {
+                                prefs.setDismissedUpdateVersion("")
+                                _snackbarMessages.tryEmit("Nova versão v$latest disponível!")
+                            }
+                            latest.isBlank() -> {
+                                _snackbarMessages.tryEmit("Versão atual: v${BuildConfig.VERSION_NAME}. Nenhuma atualização publicada.")
+                            }
+                            else -> {
+                                _snackbarMessages.tryEmit("Você já está na versão mais recente (v${BuildConfig.VERSION_NAME}).")
+                            }
+                        }
+                    }
+                },
+                onFailure = { err ->
+                    Log.w(TAG, "Falha ao verificar versão remota", err)
+                    if (manual) {
+                        _snackbarMessages.tryEmit("Não foi possível verificar atualizações no momento.")
+                    }
+                }
+            )
+            isCheckingUpdate.value = false
+        }
+    }
+
+    fun dismissAppUpdateBanner() {
+        val latest = remoteVersionConfig.value?.latestVersionName?.trim().orEmpty()
+        if (latest.isNotBlank()) {
+            viewModelScope.launch {
+                prefs.setDismissedUpdateVersion(latest)
+            }
+        }
+    }
+
+    fun setLowStockNotificationsEnabled(enabled: Boolean, context: Context) {
+        viewModelScope.launch {
+            prefs.setLowStockNotificationsEnabled(enabled)
+            if (!enabled) {
+                LowStockNotificationHelper.cancelLowStockReminder(context)
+                prefs.clearLowStockNotificationRecord()
+            } else {
+                evaluateLowStockReminder(context, forceCheck = true)
+            }
+        }
+    }
+
+    fun evaluateLowStockReminder(context: Context, forceCheck: Boolean = false) {
+        viewModelScope.launch {
+            val state = uiState.value
+            if (state.isLoading || state.householdId.isBlank()) return@launch
+
+            val lowStock = state.lowStockProducts
+            if (lowStock.isEmpty()) {
+                LowStockNotificationHelper.cancelLowStockReminder(context)
+                prefs.clearLowStockNotificationRecord()
+                return@launch
+            }
+
+            if (!state.lowStockNotificationsEnabled || !LowStockNotificationHelper.hasPermission(context)) {
+                return@launch
+            }
+
+            val (lastSig, lastTs) = prefs.getLowStockNotificationRecord()
+            val now = System.currentTimeMillis()
+            val shouldSend = LowStockReminderPolicy.shouldSendReminder(
+                lowStockProducts = lowStock,
+                notificationsEnabled = state.lowStockNotificationsEnabled,
+                lastNotifiedSignature = lastSig,
+                lastNotifiedAtMillis = if (forceCheck) 0L else lastTs,
+                nowMillis = now
+            )
+            if (shouldSend) {
+                val sent = LowStockNotificationHelper.showLowStockReminder(context, lowStock)
+                if (sent) {
+                    prefs.saveLowStockNotificationRecord(
+                        signature = LowStockReminderPolicy.buildSignature(lowStock),
+                        timestampMillis = now
+                    )
+                }
+            }
+        }
     }
 
     fun renameHousehold(newName: String) {

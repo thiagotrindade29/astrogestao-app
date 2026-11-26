@@ -80,7 +80,8 @@ service cloud.firestore {
              data.localId is int && data.localId >= 1 &&
              data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
              data.colorHex is int &&
-             data.sectorNote is string && data.sectorNote.size() <= 200;
+             data.sectorNote is string && data.sectorNote.size() <= 200 &&
+             (!('singleConsumption' in data) || data.singleConsumption is bool);
     }
 
     function isValidProduct(data) {
@@ -140,6 +141,12 @@ service cloud.firestore {
              data.savedToStock is bool &&
              data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
              data.timestampMillis is int && data.timestampMillis >= 0;
+    }
+
+    // ---- 0. APP VERSION CONFIGURATION (READ-ONLY FOR SIGNED-IN USERS) ----
+    match /appConfig/{configId} {
+      allow get: if isSignedIn() && configId == 'android';
+      allow list, create, update, delete: if false;
     }
 
     // ---- 1. PRIVATE USER PROFILES (PII ISOLATED TO OWNER) ----
@@ -301,7 +308,7 @@ service cloud.firestore {
                          incoming().householdId == householdId &&
                          request.auth.uid in incoming().memberUids &&
                          incoming().keys().hasAll(['householdId', 'memberUids', 'localId', 'name', 'colorHex', 'sectorNote', 'createdAt', 'updatedAt']) &&
-                         incoming().keys().hasOnly(['householdId', 'memberUids', 'localId', 'name', 'colorHex', 'sectorNote', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['householdId', 'memberUids', 'localId', 'name', 'colorHex', 'sectorNote', 'singleConsumption', 'createdAt', 'updatedAt']) &&
                          isValidTimestamp(incoming().createdAt) &&
                          isValidTimestamp(incoming().updatedAt) &&
                          isValidCategory(incoming()) &&
@@ -319,7 +326,7 @@ service cloud.firestore {
                            (
                              request.auth.uid in existing().memberUids &&
                              incoming().memberUids == existing().memberUids &&
-                             incoming().diff(existing()).affectedKeys().hasOnly(['name', 'colorHex', 'sectorNote', 'updatedAt'])
+                             incoming().diff(existing()).affectedKeys().hasOnly(['name', 'colorHex', 'sectorNote', 'singleConsumption', 'updatedAt'])
                            ) ||
                            (
                              isHouseholdMember(householdId) &&

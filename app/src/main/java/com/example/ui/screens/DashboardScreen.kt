@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,6 +59,8 @@ fun DashboardScreen(
     onNewProduct: () -> Unit,
     onQuickRestock: (ProductEntity) -> Unit,
     onLoadSampleCatalog: () -> Unit,
+    onOpenUpdate: (String) -> Unit = {},
+    onDismissUpdate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val extended = AstroTheme.extended
@@ -227,6 +230,89 @@ fun DashboardScreen(
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
+                    }
+                }
+            }
+        }
+
+        // Firestore remote app version update notification banner
+        val updateInfo = uiState.appUpdateInfo
+        if (updateInfo != null && updateInfo.isUpdateAvailable && !updateInfo.isDismissed) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dashboard_update_banner"),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.SystemUpdate,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Atualização disponível • v${updateInfo.latestVersionName}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = buildString {
+                                        append("Versão instalada: v${updateInfo.currentVersionName}")
+                                        if (updateInfo.releaseNotes.isNotBlank()) {
+                                            append(" • ")
+                                            append(updateInfo.releaseNotes)
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (!updateInfo.isBelowMinimum) {
+                                TextButton(
+                                    onClick = onDismissUpdate,
+                                    modifier = Modifier.testTag("dismiss_update_banner_button")
+                                ) {
+                                    Text("Depois")
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Button(
+                                onClick = { onOpenUpdate(updateInfo.downloadUrl) },
+                                modifier = Modifier.testTag("open_update_button")
+                            ) {
+                                Text(
+                                    if (updateInfo.downloadUrl.startsWith("https://", ignoreCase = true)) {
+                                        "Atualizar agora"
+                                    } else {
+                                        "Ver atualização"
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }

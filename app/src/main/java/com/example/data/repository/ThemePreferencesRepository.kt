@@ -21,6 +21,11 @@ class ThemePreferencesRepository(private val context: Context) {
         val USER_EMAIL = stringPreferencesKey("user_email")
         val USER_NAME = stringPreferencesKey("user_name")
         val LAST_ACTIVITY_MILLIS = longPreferencesKey("last_activity_millis")
+        val LOW_STOCK_NOTIFICATIONS_ENABLED = booleanPreferencesKey("low_stock_notifications_enabled")
+        val LAST_LOW_STOCK_SIGNATURE = stringPreferencesKey("last_low_stock_signature")
+        val LAST_LOW_STOCK_NOTIFIED_MILLIS = longPreferencesKey("last_low_stock_notified_millis")
+        val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
+        val NOTIFICATION_PERMISSION_PROMPTED = booleanPreferencesKey("notification_permission_prompted")
     }
 
     val isDarkMode: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -39,9 +44,63 @@ class ThemePreferencesRepository(private val context: Context) {
         prefs[Keys.USER_NAME] ?: ""
     }
 
+    val lowStockNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LOW_STOCK_NOTIFICATIONS_ENABLED] ?: true
+    }
+
+    val dismissedUpdateVersion: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DISMISSED_UPDATE_VERSION] ?: ""
+    }
+
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DARK_MODE] = enabled
+        }
+    }
+
+    suspend fun setLowStockNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LOW_STOCK_NOTIFICATIONS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setDismissedUpdateVersion(versionName: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DISMISSED_UPDATE_VERSION] = versionName.trim()
+        }
+    }
+
+    suspend fun getLowStockNotificationRecord(): Pair<String, Long> {
+        return context.dataStore.data.map { prefs ->
+            val sig = prefs[Keys.LAST_LOW_STOCK_SIGNATURE] ?: ""
+            val ts = prefs[Keys.LAST_LOW_STOCK_NOTIFIED_MILLIS] ?: 0L
+            sig to ts
+        }.first()
+    }
+
+    suspend fun saveLowStockNotificationRecord(signature: String, timestampMillis: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LAST_LOW_STOCK_SIGNATURE] = signature
+            prefs[Keys.LAST_LOW_STOCK_NOTIFIED_MILLIS] = timestampMillis
+        }
+    }
+
+    suspend fun clearLowStockNotificationRecord() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LAST_LOW_STOCK_SIGNATURE] = ""
+            prefs[Keys.LAST_LOW_STOCK_NOTIFIED_MILLIS] = 0L
+        }
+    }
+
+    suspend fun wasNotificationPermissionPrompted(): Boolean {
+        return context.dataStore.data.map { prefs ->
+            prefs[Keys.NOTIFICATION_PERMISSION_PROMPTED] ?: false
+        }.first()
+    }
+
+    suspend fun markNotificationPermissionPrompted() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.NOTIFICATION_PERMISSION_PROMPTED] = true
         }
     }
 

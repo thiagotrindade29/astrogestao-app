@@ -878,6 +878,14 @@ internal fun LazyListScope.nfceParsedItemsSection(
                         }
                     }
                 }
+                val resolvedCatId = existingMatch?.categoryId ?: item.categoryId
+                if (uiState.isSingleConsumptionCategory(resolvedCatId)) {
+                    Text(
+                        text = "Consumo único — não gera alerta de reposição",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

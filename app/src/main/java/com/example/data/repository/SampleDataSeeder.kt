@@ -27,7 +27,13 @@ internal class SampleDataSeeder(private val db: AppDatabase) {
                     CategoryEntity(name = "Limpeza", colorHex = 0xFF059669, sectorNote = "Lavanderia e área de serviço"),
                     CategoryEntity(name = "Higiene", colorHex = 0xFFD97706, sectorNote = "Banheiros e cuidados pessoais"),
                     CategoryEntity(name = "Congelados", colorHex = 0xFF7C3AED, sectorNote = "Freezer e salgados"),
-                    CategoryEntity(name = "Hortifruti", colorHex = 0xFF16A34A, sectorNote = "Frutas, verduras e legumes")
+                    CategoryEntity(name = "Hortifruti", colorHex = 0xFF16A34A, sectorNote = "Frutas, verduras e legumes"),
+                    CategoryEntity(
+                        name = "Consumo Único",
+                        colorHex = 0xFFDB2777,
+                        sectorNote = "Lanches e itens consumidos na hora (sem alerta)",
+                        singleConsumption = true
+                    )
                 )
                 defaults.forEach { categoryDao.insert(it) }
             }
@@ -60,6 +66,14 @@ internal class SampleDataSeeder(private val db: AppDatabase) {
             val higieneId = categoryDao.insert(
                 CategoryEntity(name = "Higiene", colorHex = 0xFFD97706, sectorNote = "Banheiros")
             )
+            val consumoUnicoId = categoryDao.insert(
+                CategoryEntity(
+                    name = "Consumo Único",
+                    colorHex = 0xFFDB2777,
+                    sectorNote = "Lanches e itens consumidos na hora (sem alerta)",
+                    singleConsumption = true
+                )
+            )
 
             val now = System.currentTimeMillis()
             val day = 86_400_000L
@@ -69,10 +83,10 @@ internal class SampleDataSeeder(private val db: AppDatabase) {
                     uniqueCode = "AST-0001",
                     code = "7891000100103",
                     name = "COXINHA 60GR",
-                    categoryId = despensaId,
+                    categoryId = consumoUnicoId,
                     unit = "kg",
                     quantity = 0.17,
-                    minStock = 1.0,
+                    minStock = 0.0,
                     unitPrice = 32.90,
                     lastPaidPrice = 30.50,
                     expiryDateMillis = now + 12 * day
@@ -110,10 +124,10 @@ internal class SampleDataSeeder(private val db: AppDatabase) {
                     uniqueCode = "AST-0004",
                     code = "7891000400401",
                     name = "PASTEL FRITO DE CALABRESA C QUEIJO",
-                    categoryId = geladeiraId,
+                    categoryId = consumoUnicoId,
                     unit = "un",
                     quantity = 1.0,
-                    minStock = 4.0,
+                    minStock = 0.0,
                     unitPrice = 7.50,
                     lastPaidPrice = 7.50,
                     expiryDateMillis = now + 5 * day

@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,6 +28,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -59,6 +61,9 @@ fun CategoryEditorDialog(
     var sectorNote by remember { mutableStateOf(initialCategory?.sectorNote ?: "") }
     var colorHex by remember {
         mutableLongStateOf(initialCategory?.colorHex ?: categoryColorPalette.first())
+    }
+    var singleConsumption by remember {
+        mutableStateOf(initialCategory?.singleConsumption ?: false)
     }
     var nameError by remember { mutableStateOf(false) }
 
@@ -120,6 +125,33 @@ fun CategoryEditorDialog(
                         )
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { singleConsumption = !singleConsumption },
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "Consumo único (sem alerta)",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            text = "Para lanches e itens consumidos na hora ou em poucos dias. Não entra nos avisos de estoque baixo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = singleConsumption,
+                        onCheckedChange = { singleConsumption = it },
+                        modifier = Modifier.testTag("category_single_consumption_switch")
+                    )
+                }
             }
         },
         confirmButton = {
@@ -134,7 +166,8 @@ fun CategoryEditorDialog(
                             id = initialCategory?.id ?: 0L,
                             name = name.trim(),
                             colorHex = colorHex,
-                            sectorNote = sectorNote.trim()
+                            sectorNote = sectorNote.trim(),
+                            singleConsumption = singleConsumption
                         )
                     )
                 },

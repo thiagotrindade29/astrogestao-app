@@ -42,6 +42,7 @@ internal object BackupManager {
                             put("name", cat.name)
                             put("colorHex", cat.colorHex)
                             put("sectorNote", cat.sectorNote)
+                            put("singleConsumption", cat.singleConsumption)
                         }
                     )
                 }
@@ -164,7 +165,8 @@ internal object BackupManager {
                         CategoryEntity(
                             name = name,
                             colorHex = obj.optLong("colorHex", 0xFF5B3DF5),
-                            sectorNote = obj.optString("sectorNote", "")
+                            sectorNote = obj.optString("sectorNote", ""),
+                            singleConsumption = obj.optBoolean("singleConsumption", false)
                         )
                     )
                     if (oldId > 0L) categoryIdMap[oldId] = newId

@@ -82,6 +82,16 @@ data class NfceImportState(
     val errorAction: NfceErrorAction = NfceErrorAction.NONE
 )
 
+data class AppUpdateInfo(
+    val currentVersionName: String,
+    val latestVersionName: String,
+    val isUpdateAvailable: Boolean,
+    val isBelowMinimum: Boolean = false,
+    val isDismissed: Boolean = false,
+    val releaseNotes: String = "",
+    val downloadUrl: String = ""
+)
+
 data class AstroUiState(
     val isLoading: Boolean = true,
     val isLoggedIn: Boolean = false,
@@ -97,6 +107,9 @@ data class AstroUiState(
     val cloudErrorMessage: String? = null,
     val isSyncingWorkspace: Boolean = false,
     val isDarkMode: Boolean = false,
+    val lowStockNotificationsEnabled: Boolean = true,
+    val appUpdateInfo: AppUpdateInfo? = null,
+    val isCheckingUpdate: Boolean = false,
     val categories: List<CategoryEntity> = emptyList(),
     val products: List<ProductEntity> = emptyList(),
     val aliases: List<ProductAliasEntity> = emptyList(),
@@ -125,8 +138,14 @@ data class AstroUiState(
     val totalEstimatedValue: Double
         get() = products.sumOf { it.estimatedTotalValue }
 
+    fun isSingleConsumptionCategory(categoryId: Long?): Boolean =
+        categoryId != null && categoryMap[categoryId]?.singleConsumption == true
+
+    fun isProductLowStock(product: ProductEntity): Boolean =
+        product.isLowStock && !isSingleConsumptionCategory(product.categoryId)
+
     val lowStockProducts: List<ProductEntity>
-        get() = products.filter { it.isLowStock }
+        get() = products.filter { isProductLowStock(it) }
 
     val restockAlertsCount: Int
         get() = lowStockProducts.size
@@ -144,7 +163,7 @@ data class AstroUiState(
             val productAliases = aliasesByProductId[product.id].orEmpty()
             val matchesQuery = ProductMatcher.matchesSearch(product, productAliases, productSearchQuery)
             val matchesCategory = selectedCategoryId == null || product.categoryId == selectedCategoryId
-            val matchesLowStock = !onlyLowStock || product.isLowStock
+            val matchesLowStock = !onlyLowStock || isProductLowStock(product)
             matchesQuery && matchesCategory && matchesLowStock
         }
 

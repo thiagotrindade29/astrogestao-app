@@ -118,6 +118,13 @@ async function seedAliceHouseholdWithData() {
       createdAt: ts,
       updatedAt: ts,
     });
+    await db.collection("appConfig").doc("android").set({
+      latestVersionName: "1.2.0",
+      minSupportedVersionName: "1.0.0",
+      releaseNotes: "Melhorias no estoque e notificações",
+      downloadUrl: "https://example.com/releases/v1.2.0",
+      updatedAt: ts,
+    });
   });
 }
 
@@ -126,6 +133,7 @@ test("Unauthenticated users: denied on all collections", async () => {
   const unauthDb = testEnv.unauthenticatedContext().firestore();
 
   await assertFails(unauthDb.collection("users").doc(ALICE_UID).get());
+  await assertFails(unauthDb.collection("appConfig").doc("android").get());
   await assertFails(unauthDb.collection("households").doc(HOUSEHOLD_ID).get());
   await assertFails(unauthDb.collection("householdInvites").doc(INVITE_CODE).get());
   await assertFails(
@@ -430,6 +438,40 @@ test("Kotlin-mirrored creates & partial updates succeed and reject shadow/invali
       updatedAt: ts,
     })
   );
+
+  // Category singleConsumption create, partial update, and invalid type rejection
+  await assertSucceeds(
+    aliceDb.collection("households").doc(HOUSEHOLD_ID).collection("categories").doc("11").set({
+      householdId: HOUSEHOLD_ID,
+      memberUids: [ALICE_UID],
+      localId: 11,
+      name: "Consumo Único",
+      colorHex: 0xffdb2777,
+      sectorNote: "Lanches consumidos na hora",
+      singleConsumption: true,
+      createdAt: ts,
+      updatedAt: ts,
+    })
+  );
+  await assertSucceeds(
+    aliceDb.collection("households").doc(HOUSEHOLD_ID).collection("categories").doc("10").update({
+      singleConsumption: true,
+      updatedAt: pastDate(1000),
+    })
+  );
+  await assertFails(
+    aliceDb.collection("households").doc(HOUSEHOLD_ID).collection("categories").doc("12").set({
+      householdId: HOUSEHOLD_ID,
+      memberUids: [ALICE_UID],
+      localId: 12,
+      name: "Inválida",
+      colorHex: 0xffdb2777,
+      sectorNote: "",
+      singleConsumption: "sim",
+      createdAt: ts,
+      updatedAt: ts,
+    })
+  );
 });
 
 test("Family sharing: Bob looks up invite code, joins household, receives synced access, and can leave", async () => {
@@ -510,6 +552,24 @@ test("Family sharing: Bob looks up invite code, joins household, receives synced
     bobDb.collection("households").doc(HOUSEHOLD_ID).update({
       memberUids: [ALICE_UID],
       updatedAt: pastDate(200),
+    })
+  );
+});
+
+test("App version config: signed-in users can read appConfig/android, but list and client writes are denied", async () => {
+  await seedAliceHouseholdWithData();
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+
+  const snap = await assertSucceeds(aliceDb.collection("appConfig").doc("android").get());
+  if (snap.data().latestVersionName !== "1.2.0") {
+    throw new Error("Expected latestVersionName 1.2.0");
+  }
+
+  await assertFails(aliceDb.collection("appConfig").doc("other").get());
+  await assertFails(aliceDb.collection("appConfig").get());
+  await assertFails(
+    aliceDb.collection("appConfig").doc("android").set({
+      latestVersionName: "9.9.9",
     })
   );
 });

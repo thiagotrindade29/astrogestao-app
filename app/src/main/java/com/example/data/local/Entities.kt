@@ -16,7 +16,8 @@ data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,
     val colorHex: Long,
-    val sectorNote: String = ""
+    val sectorNote: String = "",
+    val singleConsumption: Boolean = false
 )
 
 @Entity(

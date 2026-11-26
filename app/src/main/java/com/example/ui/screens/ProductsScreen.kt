@@ -209,6 +209,8 @@ fun ProductsScreen(
                         product = product,
                         category = category,
                         aliasCount = aliasCount,
+                        isLowStock = uiState.isProductLowStock(product),
+                        isSingleConsumption = uiState.isSingleConsumptionCategory(product.categoryId),
                         onEdit = { onEditProduct(product) },
                         onDelete = { pendingDelete = product },
                         onEntry = { onQuickMovement(product, MovementType.ENTRADA) },
@@ -225,6 +227,8 @@ private fun ProductCatalogCard(
     product: ProductEntity,
     category: CategoryEntity?,
     aliasCount: Int,
+    isLowStock: Boolean,
+    isSingleConsumption: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onEntry: () -> Unit,
@@ -243,7 +247,7 @@ private fun ProductCatalogCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(
             1.dp,
-            if (product.isLowStock) extended.warning.copy(alpha = 0.5f) else extended.borderSubtle
+            if (isLowStock) extended.warning.copy(alpha = 0.5f) else extended.borderSubtle
         )
     ) {
         Column(
@@ -265,7 +269,7 @@ private fun ProductCatalogCard(
                     if (category != null) {
                         CategoryPill(name = category.name, colorHex = category.colorHex)
                     }
-                    if (product.isLowStock) {
+                    if (isLowStock) {
                         LowStockBadge()
                     }
                 }
@@ -324,9 +328,13 @@ private fun ProductCatalogCard(
             ) {
                 Column {
                     Text(
-                        text = "Saldo: ${formatQty(product.quantity)} ${product.unit} (mín: ${formatQty(product.minStock)})",
+                        text = if (isSingleConsumption) {
+                            "Saldo: ${formatQty(product.quantity)} ${product.unit} • Consumo único"
+                        } else {
+                            "Saldo: ${formatQty(product.quantity)} ${product.unit} (mín: ${formatQty(product.minStock)})"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (product.isLowStock) extended.warning else MaterialTheme.colorScheme.onSurface
+                        color = if (isLowStock) extended.warning else MaterialTheme.colorScheme.onSurface
                     )
                     if (product.expiryDateMillis != null && expiryDays != null) {
                         Text(

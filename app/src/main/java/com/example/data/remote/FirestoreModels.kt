@@ -73,6 +73,7 @@ data class CategoryDoc(
     val name: String = "",
     val colorHex: Long = 0xFF5B3DF5L,
     val sectorNote: String = "",
+    val singleConsumption: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
@@ -80,7 +81,8 @@ data class CategoryDoc(
         id = if (localId > 0L) localId else docId.toLongOrNull() ?: 1L,
         name = name,
         colorHex = colorHex,
-        sectorNote = sectorNote
+        sectorNote = sectorNote,
+        singleConsumption = singleConsumption
     )
 }
 
@@ -216,3 +218,15 @@ data class MarketCheckoutDoc(
         timestampMillis = timestampMillis
     )
 }
+
+@Keep
+@IgnoreExtraProperties
+data class AppVersionConfigDoc(
+    @DocumentId val docId: String = "",
+    val latestVersionName: String = "",
+    val minSupportedVersionName: String = "",
+    val releaseNotes: String = "",
+    val downloadUrl: String = "",
+    val updatedAt: Timestamp? = null
+)
+
