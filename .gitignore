@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Gradle / Android
 .gradle/
 build/
@@ -34,3 +35,34 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+=======
+*.iml
+.gradle/
+.kotlin/
+.build-outputs/
+local.properties
+.DS_Store
+build/
+app/build/
+dist/
+debug.keystore
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+*-debug.log
+
+# Firebase config, keystores & environment secrets
+app/google-services.json
+google-services*.json
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
+
+# Unused chat screenshots, receipt samples & workflow log attachments
+public/assets/aistudio/
+*.log.txt
+
+>>>>>>> origin/main

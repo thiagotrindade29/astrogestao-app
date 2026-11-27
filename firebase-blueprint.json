@@ -2,6 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
+<<<<<<< HEAD
       "description": "Private user account metadata and onboarding state for AstroGestao.",
       "type": "object",
       "properties": {
@@ -127,6 +128,635 @@
     "/users/{userId}/purchaseItems/{itemId}": {
       "schema": { "$ref": "#/entities/PurchaseItem" },
       "description": "Purchased item price records used in financial and inflation analysis."
+=======
+      "description": "Private user profile and active household workspace pointer for a Google-authenticated user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name."
+        },
+        "email": {
+          "type": "string",
+          "description": "Google account email address (PII, private to owner)."
+        },
+        "activeHouseholdId": {
+          "type": "string",
+          "description": "Currently selected personal or shared family household workspace ID."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "activeHouseholdId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Household": {
+      "title": "Household",
+      "description": "Personal or shared family inventory and finance workspace.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the household creator."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the household workspace."
+        },
+        "inviteCode": {
+          "type": "string",
+          "description": "Uppercase alphanumeric invite code used by family members to join."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Bounded list (max 20) of authorized Firebase Auth UIDs belonging to this household."
+        },
+        "nextProductSeq": {
+          "type": "integer",
+          "description": "Monotonic sequence used to generate AST-XXXX canonical codes."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "ownerUid",
+        "name",
+        "inviteCode",
+        "memberUids",
+        "nextProductSeq",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "HouseholdInvite": {
+      "title": "HouseholdInvite",
+      "description": "Non-enumerable lookup mapping an uppercase family invite code to a household workspace.",
+      "type": "object",
+      "properties": {
+        "householdId": {
+          "type": "string",
+          "description": "Target household document ID."
+        },
+        "householdName": {
+          "type": "string",
+          "description": "Target household display name."
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Household owner UID."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "householdId",
+        "householdName",
+        "ownerUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "HouseholdMember": {
+      "title": "HouseholdMember",
+      "description": "Resident or operator profile inside a household workspace.",
+      "type": "object",
+      "properties": {
+        "householdId": {
+          "type": "string",
+          "description": "Parent household ID."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized household member UIDs for zero-lookup subcollection rules."
+        },
+        "uid": {
+          "type": "string",
+          "description": "Optional Firebase Auth UID for linked Google accounts."
+        },
+        "localId": {
+          "type": "integer",
+          "description": "Positive numeric ID for UI compatibility."
+        },
+        "name": {
+          "type": "string",
+          "description": "Member display name."
+        },
+        "email": {
+          "type": "string",
+          "description": "Member email address."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Administrador", "Morador"],
+          "description": "Member role within the household."
+        },
+        "createdAtMillis": {
+          "type": "integer",
+          "description": "Client display timestamp in epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "householdId",
+        "memberUids",
+        "uid",
+        "localId",
+        "name",
+        "email",
+        "role",
+        "createdAtMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Storage sector / category inside a household.",
+      "type": "object",
+      "properties": {
+        "householdId": {
+          "type": "string",
+          "description": "Parent household ID."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized household member UIDs."
+        },
+        "localId": {
+          "type": "integer",
+          "description": "Numeric category ID referenced by products."
+        },
+        "name": {
+          "type": "string",
+          "description": "Category name."
+        },
+        "colorHex": {
+          "type": "integer",
+          "description": "ARGB color encoded as integer."
+        },
+        "sectorNote": {
+          "type": "string",
+          "description": "Optional sector description."
+        },
+        "singleConsumption": {
+          "type": "boolean",
+          "description": "When true, items in this category are immediate/single-consumption products and do not trigger low-stock alerts."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "householdId",
+        "memberUids",
+        "localId",
+        "name",
+        "colorHex",
+        "sectorNote",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Canonical inventory product belonging to a household.",
+      "type": "object",
+      "properties": {
+        "householdId": {
+          "type": "string",
+          "description": "Parent household ID."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized household member UIDs."
+        },
+        "localId": {
+          "type": "integer",
+          "description": "Numeric product ID referenced by aliases and movements."
+        },
+        "uniqueCode": {
+          "type": "string",
+          "description": "Unique canonical AST-XXXX code."
+        },
+        "code": {
+          "type": "string",
+          "description": "Primary EAN/barcode if set."
+        },
+        "name": {
+          "type": "string",
+          "description": "Product name."
+        },
+        "categoryId": {
+          "type": "integer",
+          "description": "Optional numeric category localId."
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit of measure (un, kg, L, etc.)."
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Current stock balance."
+        },
+        "minStock": {
+          "type": "number",
+          "description": "Minimum stock threshold for restock alerts."
+        },
+        "unitPrice": {
+          "type": "number",
+          "description": "Current unit price in BRL."
+        },
+        "lastPaidPrice": {
+          "type": "number",
+          "description": "Optional previous paid unit price."
+        },
+        "expiryDateMillis": {
+          "type": "integer",
+          "description": "Optional expiration timestamp in epoch milliseconds."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional product notes."
+        },
+        "updatedAtMillis": {
+          "type": "integer",
+          "description": "Client display update epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "householdId",
+        "memberUids",
+        "localId",
+        "uniqueCode",
+        "code",
+        "name",
+        "unit",
+        "quantity",
+        "minStock",
+        "unitPrice",
+        "notes",
+        "updatedAtMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ProductAlias": {
+      "title": "ProductAlias",
+      "description": "External market barcode/internal code alias linked to a canonical product.",
+      "type": "object",
+      "properties": {
+        "householdId": {
+          "type": "string",
+          "description": "Parent household ID."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized household member UIDs."
+        },
+        "localId": {
+          "type": "integer",
+          "description": "Numeric alias ID."
+        },
+        "productId": {
+          "type": "integer",
+          "description": "Canonical product localId."
+        },
+        "externalCode": {
+          "type": "string",
+          "description": "External barcode or market internal code."
+        },
+        "marketName": {
+          "type": "string",
+          "description": "Supermarket or source name."
+        },
+        "createdAtMillis": {
+          "type": "integer",
+          "description": "Creation epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "householdId",
+        "memberUids",
+        "localId",
+        "productId",
+        "externalCode",
+        "marketName",
+        "createdAtMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Audited inventory movement entry, exit, or balance adjustment.",
+      "type": "object",
+      "properties": {
+        "householdId": {
+          "type": "string",
+          "description": "Parent household ID."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized household member UIDs."
+        },
+        "localId": {
+          "type": "integer",
+          "description": "Numeric movement ID."
+        },
+        "productId": {
+          "type": "integer",
+          "description": "Target product localId."
+        },
+        "productNameSnapshot": {
+          "type": "string",
+          "description": "Product name snapshot at movement time."
+        },
+        "productUnitSnapshot": {
+          "type": "string",
+          "description": "Product unit snapshot at movement time."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["ENTRADA", "SAIDA", "AJUSTE"],
+          "description": "Movement type."
+        },
+        "quantityDelta": {
+          "type": "number",
+          "description": "Signed quantity change."
+        },
+        "previousBalance": {
+          "type": "number",
+          "description": "Stock balance before movement."
+        },
+        "newBalance": {
+          "type": "number",
+          "description": "Stock balance after movement."
+        },
+        "unitPrice": {
+          "type": "number",
+          "description": "Unit price at movement time."
+        },
+        "totalValue": {
+          "type": "number",
+          "description": "Absolute financial impact."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Audit reason or origin."
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Name of the resident who executed the action."
+        },
+        "timestampMillis": {
+          "type": "integer",
+          "description": "Display movement epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "householdId",
+        "memberUids",
+        "localId",
+        "productId",
+        "productNameSnapshot",
+        "productUnitSnapshot",
+        "type",
+        "quantityDelta",
+        "previousBalance",
+        "newBalance",
+        "unitPrice",
+        "totalValue",
+        "reason",
+        "authorName",
+        "timestampMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MarketCheckout": {
+      "title": "MarketCheckout",
+      "description": "Completed supermarket cart checkout record for financial tracking.",
+      "type": "object",
+      "properties": {
+        "householdId": {
+          "type": "string",
+          "description": "Parent household ID."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized household member UIDs."
+        },
+        "localId": {
+          "type": "integer",
+          "description": "Numeric checkout ID."
+        },
+        "storeName": {
+          "type": "string",
+          "description": "Store or supermarket name."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Checkout notes."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total checkout value in BRL."
+        },
+        "itemCount": {
+          "type": "integer",
+          "description": "Number of distinct cart items."
+        },
+        "savedToStock": {
+          "type": "boolean",
+          "description": "Whether items were added into household inventory."
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Name of the shopper."
+        },
+        "timestampMillis": {
+          "type": "integer",
+          "description": "Display checkout epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": [
+        "householdId",
+        "memberUids",
+        "localId",
+        "storeName",
+        "notes",
+        "totalAmount",
+        "itemCount",
+        "savedToStock",
+        "authorName",
+        "timestampMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AppVersionConfig": {
+      "title": "AppVersionConfig",
+      "description": "Remote app version configuration document used to notify users when an APK update is available.",
+      "type": "object",
+      "properties": {
+        "latestVersionName": {
+          "type": "string",
+          "description": "Latest semantic version string (e.g., 1.2.0)."
+        },
+        "minSupportedVersionName": {
+          "type": "string",
+          "description": "Optional minimum recommended semantic version string."
+        },
+        "releaseNotes": {
+          "type": "string",
+          "description": "Optional short summary of what changed in the update."
+        },
+        "downloadUrl": {
+          "type": "string",
+          "description": "Optional HTTPS link to download the latest APK or release page."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional update timestamp."
+        }
+      },
+      "required": [
+        "latestVersionName"
+      ]
+    }
+  },
+  "firestore": {
+    "/appConfig/{configId}": {
+      "schema": { "$ref": "#/entities/AppVersionConfig" },
+      "description": "Read-only remote app configuration (e.g. appConfig/android) for update notifications."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private Google user profile and active household workspace reference."
+    },
+    "/households/{householdId}": {
+      "schema": { "$ref": "#/entities/Household" },
+      "description": "Personal or family workspace metadata and bounded member UID list."
+    },
+    "/householdInvites/{inviteCode}": {
+      "schema": { "$ref": "#/entities/HouseholdInvite" },
+      "description": "Non-enumerable lookup records mapping invite codes to household IDs."
+    },
+    "/households/{householdId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/HouseholdMember" },
+      "description": "Household residents and operators list."
+    },
+    "/households/{householdId}/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Household inventory sectors and categories."
+    },
+    "/households/{householdId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Canonical inventory products inside a household."
+    },
+    "/households/{householdId}/productAliases/{aliasId}": {
+      "schema": { "$ref": "#/entities/ProductAlias" },
+      "description": "External market barcode aliases for canonical products."
+    },
+    "/households/{householdId}/stockMovements/{movementId}": {
+      "schema": { "$ref": "#/entities/StockMovement" },
+      "description": "Audited inventory movements inside a household."
+    },
+    "/households/{householdId}/marketCheckouts/{checkoutId}": {
+      "schema": { "$ref": "#/entities/MarketCheckout" },
+      "description": "Market POS checkout summaries inside a household."
+>>>>>>> origin/main
     }
   }
 }

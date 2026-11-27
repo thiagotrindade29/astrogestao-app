@@ -11,9 +11,12 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+<<<<<<< HEAD
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
+=======
+>>>>>>> origin/main
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -22,5 +25,9 @@ dependencyResolutionManagement {
     }
 }
 
+<<<<<<< HEAD
 rootProject.name = "Inventory Control"
+=======
+rootProject.name = "AstroGestao"
+>>>>>>> origin/main
 include(":app")

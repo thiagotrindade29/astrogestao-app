@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AstroGestão</string>
+<<<<<<< HEAD
     <string name="app_tagline">Estoque da casa, compras e finanças</string>
     <string name="auth_title">Organize sua casa e saiba quanto vai gastar antes do caixa</string>
     <string name="auth_subtitle">Controle o que tem na despensa e geladeira, escaneie produtos no mercado em tempo real e acompanhe os preços de cada compra.</string>
@@ -23,4 +24,152 @@
     <string name="cd_add_product">Adicionar produto</string>
     <string name="cd_import_nfe">Importar cupom fiscal ou nota</string>
     <string name="cd_sign_out">Sair da conta</string>
+=======
+    <string name="brand_subtitle">Estoque e finanças</string>
+
+    <!-- Login -->
+    <string name="login_eyebrow">ESTOQUE &amp; FAMÍLIA SINCRONIZADOS</string>
+    <string name="login_headline">Seu estoque em qualquer celular.\nCompartilhado com sua família.</string>
+    <string name="login_subheadline">Acesse com sua conta Google ou com e-mail e senha para sincronizar seus produtos, cupons e finanças na nuvem.</string>
+    <string name="login_welcome_tag">ACESSO SEGURO NA NUVEM</string>
+    <string name="login_title">Acesse sua conta</string>
+    <string name="login_subtitle">Entre com e-mail e senha ou sua conta Google. Faça suas compras com segurança e sabendo quanto vai pagar antes de chegar no caixa.</string>
+    <string name="action_sign_in_google">Entrar com Google</string>
+    <string name="action_sign_in_email">Entrar com E-mail</string>
+    <string name="action_create_account">Criar Conta</string>
+    <string name="action_forgot_password">Esqueci minha senha</string>
+    <string name="label_email">E-mail</string>
+    <string name="label_password">Senha</string>
+    <string name="label_confirm_password">Confirmar senha</string>
+    <string name="login_tab_sign_in">Entrar</string>
+    <string name="login_tab_sign_up">Criar Conta</string>
+    <string name="login_divider_or">ou</string>
+    <string name="login_footer_note">Por segurança, o acesso inicia nesta tela e encerra após 1 hora sem atividade.</string>
+    <string name="session_expired_inactivity">Sessão encerrada após 1 hora de inatividade. Entre novamente para continuar.</string>
+
+    <!-- Navegação -->
+    <string name="nav_home">Início</string>
+    <string name="nav_products">Produtos</string>
+    <string name="nav_market">Mercado</string>
+    <string name="nav_finance">Finanças</string>
+    <string name="nav_more">Mais</string>
+
+    <!-- Visão Geral / Dashboard -->
+    <string name="dashboard_title">Visão Geral do Estoque</string>
+    <string name="dashboard_subtitle">Resumo em tempo real dos itens da casa, alertas de reposição e vencimento próximo via Firestore.</string>
+    <string name="dashboard_cloud_synced">Sincronizado com Firestore</string>
+    <string name="action_view_catalog">Ver Catálogo</string>
+    <string name="action_new_product">+ Novo Produto</string>
+    <string name="action_import_nfce">Importar Cupom / NF-e</string>
+    <string name="kpi_registered_products">TOTAL DE PRODUTOS</string>
+    <string name="kpi_registered_sub">%1$s unidades em estoque</string>
+    <string name="kpi_units_in_stock">UNIDADES EM ESTOQUE</string>
+    <string name="kpi_units_sub">Soma de todas as quantidades</string>
+    <string name="kpi_estimated_value">VALOR ESTIMADO TOTAL</string>
+    <string name="kpi_estimated_sub">Baseado no preço unitário</string>
+    <string name="kpi_restock_alerts">ITENS EM REPOSIÇÃO</string>
+    <string name="kpi_restock_sub">Abaixo do estoque mínimo</string>
+    <string name="kpi_expiry_alerts">VENCIMENTO PRÓXIMO</string>
+    <string name="kpi_expiring_sub">Nos próximos 30 dias</string>
+    <string name="section_recent_movements">Últimas Movimentações</string>
+    <string name="action_see_history">Ver histórico</string>
+
+    <!-- Importação NFC-e -->
+    <string name="nfce_title">Importar Cupom / NFC-e</string>
+    <string name="nfce_subtitle">Consulte a SEFAZ da sua região, envie o XML da nota ou cole o link/chave de 44 dígitos.</string>
+    <string name="nfce_input_hint">Cole o link do QR Code, chave de 44 dígitos ou texto do cupom…</string>
+    <string name="nfce_portal_label">Portal SEFAZ Regional</string>
+    <string name="nfce_open_portal">Abrir Portal SEFAZ</string>
+    <string name="nfce_fetch_url">Consultar Link / Extrair</string>
+    <string name="nfce_import_xml">Importar XML</string>
+    <string name="nfce_fill_key">Preencher Chave</string>
+    <string name="nfce_extract_page">Extrair Itens da Página</string>
+
+    <string name="section_restock_title">Lista de Compras / Reposição</string>
+    <string name="section_restock_subtitle">Produtos com estoque igual ou abaixo do mínimo configurado</string>
+    <string name="action_see_all">Ver todos</string>
+    <string name="badge_low_stock">Estoque baixo</string>
+    <string name="action_restock_short">+ Repor</string>
+    <string name="restock_empty_msg">Tudo em dia! Nenhum item abaixo do estoque mínimo.</string>
+
+    <string name="section_expiring_title">Próximos do Vencimento (30 dias)</string>
+    <string name="section_expiring_subtitle">Fique de olho para evitar desperdícios</string>
+    <string name="expiring_empty_msg">Nenhum produto com vencimento próximo nos próximos 30 dias.</string>
+    <string name="action_load_sample_catalog">Carregar catálogo de exemplo</string>
+
+    <!-- Produtos -->
+    <string name="products_title">Catálogo de Produtos</string>
+    <string name="products_search_hint">Buscar por nome ou código…</string>
+    <string name="filter_low_stock_only">Somente estoque baixo</string>
+    <string name="filter_all">Todas</string>
+    <string name="products_empty_title">Nenhum produto encontrado</string>
+    <string name="products_empty_body">Cadastre itens da sua despensa, geladeira ou limpeza para monitorar quantidades, validade e valor em reais.</string>
+
+    <!-- Modo Mercado (Frente de Caixa) -->
+    <string name="market_title">Modo Mercado (Assistente em Tempo Real)</string>
+    <string name="market_subtitle">Monitore seu carrinho de compras no celular, compare preços na prateleira com o mês anterior e calcule seu gasto total antes do caixa!</string>
+    <string name="market_store_label">Local / Supermercado</string>
+    <string name="market_notes_label">Observações / Nota Fiscal</string>
+    <string name="market_notes_hint">Ex: Compra quinzenal, itens para o churrasco…</string>
+    <string name="market_search_hint">Digite o nome ou código de barras do produto…</string>
+    <string name="market_scan_camera">Escanear com Câmera</string>
+    <string name="market_empty_cart_title">Seu carrinho de compras está vazio</string>
+    <string name="market_empty_cart_body">Use a barra de pesquisa ou clique em Escanear com Câmera para bipar produtos na prateleira, ou carregue os itens que estão acabando em casa.</string>
+    <string name="market_load_low_stock_single">Carregar 1 item com estoque baixo</string>
+    <string name="market_load_low_stock">Carregar %1$d itens com estoque baixo</string>
+    <string name="market_restock_badge">Repor Estoque Baixo (%1$d)</string>
+    <string name="market_save_to_stock_toggle">Guardar itens no estoque ao finalizar</string>
+    <string name="market_checkout_button">Finalizar Compra</string>
+
+    <!-- Finanças -->
+    <string name="finance_title">Análise Financeira</string>
+    <string name="finance_subtitle">Valor patrimonial em casa, gastos com compras e consumo por setor.</string>
+    <string name="finance_total_purchases">Total em Compras (Entradas)</string>
+    <string name="finance_total_consumed">Consumo Estimado (Saídas)</string>
+    <string name="finance_chart_title">Compras vs. Consumo por Mês</string>
+    <string name="finance_category_breakdown">Valor em Estoque por Categoria</string>
+
+    <!-- Mais / Auditoria / Categorias / Usuários -->
+    <string name="more_title">Gestão e Configurações</string>
+    <string name="tab_movements">Movimentações</string>
+    <string name="tab_categories">Categorias</string>
+    <string name="tab_users">Usuários</string>
+    <string name="action_new_category">+ Nova Categoria</string>
+    <string name="action_new_user">+ Novo Usuário</string>
+    <string name="action_logout">Sair</string>
+    <string name="movements_empty">Nenhuma movimentação registrada ainda. Entradas, saídas e ajustes aparecem aqui com auditoria completa.</string>
+
+    <!-- Formulários -->
+    <string name="label_name">Nome</string>
+    <string name="label_code">Código (opcional)</string>
+    <string name="label_category">Categoria</string>
+    <string name="label_unit">Unidade</string>
+    <string name="label_quantity">Quantidade atual</string>
+    <string name="label_min_stock">Estoque mínimo</string>
+    <string name="label_unit_price">Preço unitário (R$)</string>
+    <string name="label_expiry_days">Vencimento em (dias, opcional)</string>
+    <string name="label_reason">Observação / Motivo da auditoria</string>
+    <string name="label_sector_note">Setor da casa (descrição)</string>
+    <string name="label_color">Identificador visual (cor)</string>
+    <string name="label_dark_mode">Tema escuro</string>
+    <string name="action_save">Salvar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_back">Voltar</string>
+    <string name="action_delete">Excluir</string>
+    <string name="action_edit">Editar</string>
+    <string name="confirm_delete_title">Confirmar exclusão</string>
+    <string name="confirm_delete_product">Excluir "%1$s" e todo o seu histórico de movimentações?</string>
+    <string name="confirm_delete_category">Excluir a categoria "%1$s"? Os produtos vinculados ficarão sem categoria.</string>
+    <string name="confirm_sample_title">Substituir dados pelo catálogo de exemplo?</string>
+    <string name="confirm_sample_body">Você já possui itens ou movimentações salvas. Carregar o catálogo de exemplo apagará os produtos, categorias e históricos atuais.</string>
+    <string name="action_replace">Substituir</string>
+    <string name="section_backup_beta">Backup, Versão e Feedback</string>
+    <string name="action_export_backup">Exportar Backup (.json)</string>
+    <string name="action_restore_backup">Restaurar Backup (.json)</string>
+    <string name="action_share_diagnostics">Enviar Diagnóstico / Feedback</string>
+    <string name="confirm_restore_title">Restaurar backup?</string>
+    <string name="confirm_restore_body">A restauração substituirá as categorias, produtos e movimentações atuais pelos dados do arquivo selecionado.</string>
+    <string name="error_required">Campo obrigatório</string>
+    <string name="error_invalid_number">Informe um valor numérico válido</string>
+>>>>>>> origin/main
 </resources>

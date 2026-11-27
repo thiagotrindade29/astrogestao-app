@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <resources>
+<<<<<<< HEAD
     <string name="firestore_database_id" translatable="false">ai-studio-android-inventor-50f16812-b83c-4d69-be0c-475d3eea11a0</string>
+=======
+    <string name="firestore_database_id" translatable="false">ai-studio-android-astroges-3e20450f-02d0-4bac-9240-b66a74328265</string>
+>>>>>>> origin/main
 </resources>
